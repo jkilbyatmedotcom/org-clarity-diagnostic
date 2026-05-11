@@ -661,10 +661,16 @@ CRITICAL INSTRUCTIONS:
     ];
 
     try {
-      setTimeout(() => setLoadingMsg("Running Pass 1 — assessing your purpose statement..."), 2000);
-      setTimeout(() => setLoadingMsg("Running Pass 2 — assessing individual roles..."), 6000);
-      setTimeout(() => setLoadingMsg("Running Pass 3 — mapping collective alignment..."), 11000);
-      setTimeout(() => setLoadingMsg("Building your report..."), 16000);
+      setTimeout(() => setLoadingMsg("Running Pass 1 — assessing your purpose statement..."), 4000);
+      setTimeout(() => setLoadingMsg("Running Pass 2 — assessing individual roles..."), 10000);
+      setTimeout(() => setLoadingMsg("Running Pass 3 — mapping collective alignment..."), 18000);
+      setTimeout(() => setLoadingMsg("Building your report..."), 26000);
+
+      // Hard timeout — never stay stuck on loading screen
+      const timeoutId = setTimeout(() => {
+        setError("The diagnostic is taking longer than expected. Please try again.");
+        setStep("input");
+      }, 90000);
 
       const response = await fetch("/api/diagnose", {
         method: "POST",
@@ -676,9 +682,10 @@ CRITICAL INSTRUCTIONS:
         }),
       });
 
+      clearTimeout(timeoutId);
       const data = await response.json();
 
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
       const raw = data.content?.find(b => b.type === "text")?.text || "";
       // Strip markdown fences, leading/trailing whitespace, and any text before the first {
@@ -691,6 +698,7 @@ CRITICAL INSTRUCTIONS:
       setReport(parsed);
       setStep("report");
     } catch (err) {
+      clearTimeout(timeoutId);
       setError(`Something went wrong: ${err.message}. Please try again — if the problem persists, try reducing the number of roles or the length of your JD text.`);
       setStep("input");
     }
