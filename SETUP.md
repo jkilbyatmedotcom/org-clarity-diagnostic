@@ -6,7 +6,7 @@
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | Runs the diagnostic. Already set. |
 | `RESEND_API_KEY` | For email | Sends the report to the user and a copy to you. Without it, no emails are sent but the diagnostic still works. |
-| `HUBSPOT_TOKEN` | For CRM | HubSpot private app token. Creates or updates each user as a contact and attaches a note with their results. |
+| `HUBSPOT_TOKEN` | For CRM | HubSpot service key. Creates or updates each user as a contact and attaches a note with their results. |
 | `OWNER_EMAIL` | No | Where your copy goes. Defaults to `james@jameskilbyadvisory.com.au`. |
 | `REPORT_FROM_EMAIL` | No | Sender. Defaults to `James Kilby Advisory <reports@jameskilbyadvisory.com.au>`. Must be on a domain verified in Resend. |
 | `ALLOWED_ORIGINS` | No | Extra comma-separated origins allowed to call the API. Not needed for the Framer embed, which loads the app from its own Vercel domain. |
@@ -19,11 +19,19 @@ After adding or changing variables, redeploy for them to take effect.
 3. Create an API key with sending access and save it as `RESEND_API_KEY`.
 
 ## HubSpot (CRM)
-1. HubSpot → Settings → Integrations → Private Apps → Create a private app (Legacy apps on newer accounts).
-2. Scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write`.
-3. Create the app, copy the access token and save it as `HUBSPOT_TOKEN`.
+HubSpot stopped allowing new private apps in October 2026. Use a Service Key instead (same Bearer-token usage, no code change).
+1. HubSpot → Development → Keys → Service keys (some accounts: Settings → Integrations → Service Keys) → Create service key.
+2. Scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write` (plus a notes scope if your account lists one).
+3. Create, open the key, click Show → Copy, and save it as `HUBSPOT_TOKEN`.
 
 ## How delivery works
 - The diagnostic runs on the server with a fixed prompt, model and token limit. The browser only sends the user's answers.
 - When the report is ready, the server sends two emails (to the user, and a copy to you with their details, reply-to set to them) and upserts them in HubSpot with a note.
 - If any delivery step fails, it is logged in Vercel's function logs and the user still sees their report.
+
+## Purpose–Market Alignment (optional website field)
+- If a user enters their website, the server reads the homepage plus up to two About/Services pages as plain text (capped at ~3,500 tokens) and runs a second, smaller Claude call in parallel with the main diagnostic.
+- Adds roughly US$0.02 per diagnostic that includes a website. No extra environment variables are needed.
+- Only public web addresses are fetched; private and internal network addresses are refused, including via redirects.
+- If the site can't be read (blocked, too little text, JavaScript-only pages), the report shows a short note and everything else is unaffected.
+- Site reads are cached per server instance for 30 days.

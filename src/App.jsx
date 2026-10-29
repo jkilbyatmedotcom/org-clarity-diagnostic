@@ -417,6 +417,24 @@ const S = {
     lineHeight: 1.5,
     cursor: "pointer",
   },
+  compareRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    gap: 8,
+  },
+  compareCell: {
+    borderRadius: 5,
+    padding: "10px 12px",
+    fontSize: 13,
+    color: CHARCOAL,
+    lineHeight: 1.5,
+  },
+  compareLabel: {
+    display: "block",
+    fontSize: 11,
+    color: "#666",
+    marginBottom: 2,
+  },
   sentBox: {
     background: "#EEF6EF",
     border: "1.5px solid #27AE60",
@@ -513,7 +531,8 @@ export default function OrgClarityDiagnostic() {
   const [contactName, setContactName]   = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [optIn, setOptIn]               = useState(false);
-  const [website, setWebsite]           = useState(""); // honeypot, hidden from people
+  const [hpCheck, setHpCheck]           = useState(""); // honeypot, hidden from people
+  const [websiteUrl, setWebsiteUrl]     = useState("");
   const [delivery, setDelivery]         = useState(null);
 
   const fileRefs = useRef({});
@@ -555,6 +574,7 @@ export default function OrgClarityDiagnostic() {
     // Validation
     if (!contactName.trim()) { setError("Please enter your name so we can send you your report."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim())) { setError("Please enter a valid email address so we can send you your report."); return; }
+    if (websiteUrl.trim() && !/^(https?:\/\/)?[^\s/]+\.[^\s/]{2,}(\/\S*)?$/i.test(websiteUrl.trim())) { setError("Please check your website address — for example, yourcompany.com.au"); return; }
     if (!purposeMode) { setError("Please select whether you have an org purpose statement."); return; }
     if (purposeMode === "have" && !purposeText.trim()) { setError("Please enter your org purpose statement."); return; }
     if (purposeMode === "build" && !scaffold.what.trim()) { setError("Please answer at least the first purpose question."); return; }
@@ -581,7 +601,8 @@ export default function OrgClarityDiagnostic() {
         signal: controller.signal,
         body: JSON.stringify({
           contact: { name: contactName.trim(), email: contactEmail.trim(), optIn },
-          website,
+          hp_check: hpCheck,
+          website_url: websiteUrl.trim(),
           orgName, industry, purposeMode, purposeText, scaffold,
           roles: validRoles.map(r => ({ title: r.title, manualText: r.manualText, files: r.files })),
         }),
@@ -660,7 +681,7 @@ export default function OrgClarityDiagnostic() {
                 <span>Send me occasional insights from James Kilby Advisory. Unsubscribe any time.</span>
               </label>
               <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
-                <label>Leave this field empty<input tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
+                <label>Leave this field empty<input tabIndex={-1} autoComplete="off" name="hp_check" value={hpCheck} onChange={e => setHpCheck(e.target.value)} /></label>
               </div>
             </div>
 
@@ -671,6 +692,11 @@ export default function OrgClarityDiagnostic() {
               <div style={{ marginBottom: 16 }}>
                 <label style={S.label}>Organisation name <span style={{ fontWeight: 400, color: "#999" }}>(optional)</span></label>
                 <input style={S.input} value={orgName} onChange={e => setOrgName(e.target.value)} placeholder="e.g. Timber & Trade Co." />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={S.label} htmlFor="ocd-website">Website <span style={{ fontWeight: 400, color: "#999" }}>(optional)</span></label>
+                <input id="ocd-website" style={S.input} value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} placeholder="e.g. yourcompany.com.au" autoComplete="url" inputMode="url" />
+                <p style={{ fontSize: 12, color: "#888", margin: "6px 0 0", lineHeight: 1.5 }}>Add it and your report will compare what your purpose says with what your website tells the market.</p>
               </div>
               <div>
                 <label style={S.label}>Industry</label>
@@ -868,6 +894,53 @@ export default function OrgClarityDiagnostic() {
                     ))}
                   </div>
                 </div>
+
+                {/* Purpose in the market */}
+                {report.purposeMarketAlignment?.status === "ok" && (() => {
+                  const a = report.purposeMarketAlignment;
+                  const rows = [
+                    ["Audience", a.audience?.purpose, a.audience?.website, a.audience?.observation],
+                    ["Promise", a.promise?.purpose, a.promise?.website, a.promise?.observation],
+                    ["Value discipline", a.valueDiscipline?.purposeImplies, a.valueDiscipline?.websiteSignals, a.valueDiscipline?.observation],
+                  ];
+                  return (
+                    <div style={S.passBlock}>
+                      <p style={S.passTitle}>Purpose in the Market</p>
+                      <h3 style={S.passHeading}>
+                        Purpose–Market Alignment: <span style={{ color: ratingColor(a.rating === "Aligned" ? "strong" : a.rating === "Partially aligned" ? "partial" : "weak") }}>{a.rating}</span>
+                      </h3>
+                      <div style={S.findingItem}>{a.headline}</div>
+                      {rows.map(([lbl, p, w, obs]) => (
+                        <div key={lbl} style={{ marginTop: 14 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: NAVY, margin: "0 0 6px" }}>{lbl}</p>
+                          <div style={S.compareRow}>
+                            <div style={{ ...S.compareCell, background: "#F0F6FB" }}><span style={S.compareLabel}>Purpose says</span>{p}</div>
+                            <div style={{ ...S.compareCell, background: "#FFF8EC" }}><span style={S.compareLabel}>Website says</span>{w}</div>
+                          </div>
+                          <p style={{ ...S.passText, fontSize: 13, marginTop: 6 }}>{obs}</p>
+                        </div>
+                      ))}
+                      <div style={{ ...S.flagItem, marginTop: 8 }}>
+                        <strong>Distinctiveness — {a.distinctiveness?.rating}:</strong> {a.distinctiveness?.observation}
+                      </div>
+                      <div style={{ background: "#F0F6FB", border: `1.5px solid ${LBLUE}`, borderRadius: 6, padding: "14px 18px", marginTop: 12 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", color: CAMEL, margin: "0 0 6px" }}>Fix First</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: NAVY, lineHeight: 1.5, margin: 0 }}>{a.fixFirst}</p>
+                      </div>
+                      <p style={{ fontSize: 11, color: "#888", marginTop: 10 }}>
+                        {a.websiteRole ? `Website role: ${a.websiteRole} · ` : ""}Based on {(a.pagesRead || []).length} page{(a.pagesRead || []).length === 1 ? "" : "s"} of {a.url}
+                      </p>
+                    </div>
+                  );
+                })()}
+                {report.purposeMarketAlignment?.status === "unavailable" && (
+                  <div style={S.passBlock}>
+                    <p style={S.passTitle}>Purpose in the Market</p>
+                    <p style={{ ...S.passText, color: "#666", fontSize: 13 }}>
+                      We couldn't assess {report.purposeMarketAlignment.url || "your website"} this time. {report.purposeMarketAlignment.reason}
+                    </p>
+                  </div>
+                )}
 
                 {/* Pass 2 */}
                 <div style={S.passBlock}>
