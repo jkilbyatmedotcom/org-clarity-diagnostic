@@ -10,6 +10,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         culture: resolve(__dirname, 'culture.html'),
         cultureResults: resolve(__dirname, 'culture-results.html'),
+        cultureLeader: resolve(__dirname, 'culture-leader.html'),
       },
     },
   },
