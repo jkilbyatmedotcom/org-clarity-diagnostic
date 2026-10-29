@@ -35,3 +35,9 @@ HubSpot stopped allowing new private apps in October 2026. Use a Service Key ins
 - Only public web addresses are fetched; private and internal network addresses are refused, including via redirects.
 - If the site can't be read (blocked, too little text, JavaScript-only pages), the report shows a short note and everything else is unaffected.
 - Site reads are cached per server instance for 30 days.
+
+## ABN Lookup (optional ABN field)
+- Register for a free ABN Lookup GUID at https://abr.business.gov.au/Tools/WebServices and save it as `ABR_GUID`. Without it, the lookup is skipped and nothing else changes.
+- If the user enters an ABN, the report header shows their legal name, ABN, years registered and state, and the details go into the HubSpot note and your lead email.
+- If no ABN is entered, the tool searches the register by organisation name. It only accepts a clear-cut match, never shows a name match to the user, and flags it in your copy as "matched by name, please verify".
+- "Years registered" comes from the date the ABN's current status took effect, which is usually, but not always, when the business started.

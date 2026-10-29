@@ -2,6 +2,7 @@ import { buildPrompt } from "../lib/prompt.js";
 import { deliverReport } from "../lib/deliver.js";
 import { readWebsite } from "../lib/website.js";
 import { buildAlignmentPrompt, ALIGNMENT_MAX_TOKENS } from "../lib/alignment.js";
+import { lookupBusiness, cleanAbn, isValidAbn } from "../lib/abn.js";
 
 // ─── Fixed server-side settings ───────────────────────────────────────────────
 // The browser can no longer choose the model, token budget or prompt.
@@ -90,9 +91,12 @@ function parseInput(body) {
   if (roles.length === 0) return { error: "Please add at least one role — upload a JD or enter role details manually." };
 
   const website = str(body.website_url, 300);
+  const abn = cleanAbn(str(body.abn, 40));
+  if (abn && !isValidAbn(abn)) return { error: "That ABN doesn't look right. Please check it, or leave the field blank." };
 
   const input = {
     website,
+    abn,
     orgName: str(body.orgName, LIMITS.short),
     industry: str(body.industry, LIMITS.short),
     purposeMode, purposeText, scaffold, roles,
@@ -161,6 +165,7 @@ export default async function handler(req, res) {
   if (parsed.error) return fail(res, 400, parsed.error);
   const { contact, input } = parsed;
 
+  const registerPromise = lookupBusiness({ abn: input.abn, name: input.orgName }).catch(() => null);
   const alignmentPromise = runAlignment(input).catch(err => {
     console.error("[alignment] unexpected", err);
     return null;
@@ -176,8 +181,9 @@ export default async function handler(req, res) {
       : "The diagnostic couldn't be completed. Please try again — if it keeps happening, try fewer roles or shorter documents.");
   }
 
-  const alignment = await alignmentPromise;
+  const [alignment, register] = await Promise.all([alignmentPromise, registerPromise]);
   if (alignment) report.purposeMarketAlignment = alignment;
+  if (register) report.businessRegister = register;
 
   // Report is ready. Deliver it (emails + CRM) before responding, because the
   // function may be frozen as soon as the response is sent.
