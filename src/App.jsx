@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { renderReportHtml } from "../lib/reportHtml.js";
+import { renderReportHtml, verifiedIdentity } from "../lib/reportHtml.js";
 
 // ─── Brand Palette ───────────────────────────────────────────────────────────
 const NAVY    = "#0A2A43";
@@ -533,6 +533,7 @@ export default function OrgClarityDiagnostic() {
   const [optIn, setOptIn]               = useState(false);
   const [hpCheck, setHpCheck]           = useState(""); // honeypot, hidden from people
   const [websiteUrl, setWebsiteUrl]     = useState("");
+  const [abn, setAbn]                   = useState("");
   const [delivery, setDelivery]         = useState(null);
 
   const fileRefs = useRef({});
@@ -575,6 +576,7 @@ export default function OrgClarityDiagnostic() {
     if (!contactName.trim()) { setError("Please enter your name so we can send you your report."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim())) { setError("Please enter a valid email address so we can send you your report."); return; }
     if (websiteUrl.trim() && !/^(https?:\/\/)?[^\s/]+\.[^\s/]{2,}(\/\S*)?$/i.test(websiteUrl.trim())) { setError("Please check your website address — for example, yourcompany.com.au"); return; }
+    if (abn.trim() && abn.replace(/\D/g, "").length !== 11) { setError("An ABN has 11 digits. Please check it, or leave the field blank."); return; }
     if (!purposeMode) { setError("Please select whether you have an org purpose statement."); return; }
     if (purposeMode === "have" && !purposeText.trim()) { setError("Please enter your org purpose statement."); return; }
     if (purposeMode === "build" && !scaffold.what.trim()) { setError("Please answer at least the first purpose question."); return; }
@@ -603,6 +605,7 @@ export default function OrgClarityDiagnostic() {
           contact: { name: contactName.trim(), email: contactEmail.trim(), optIn },
           hp_check: hpCheck,
           website_url: websiteUrl.trim(),
+          abn: abn.replace(/\D/g, ""),
           orgName, industry, purposeMode, purposeText, scaffold,
           roles: validRoles.map(r => ({ title: r.title, manualText: r.manualText, files: r.files })),
         }),
@@ -692,6 +695,10 @@ export default function OrgClarityDiagnostic() {
               <div style={{ marginBottom: 16 }}>
                 <label style={S.label}>Organisation name <span style={{ fontWeight: 400, color: "#999" }}>(optional)</span></label>
                 <input style={S.input} value={orgName} onChange={e => setOrgName(e.target.value)} placeholder="e.g. Timber & Trade Co." />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={S.label} htmlFor="ocd-abn">ABN <span style={{ fontWeight: 400, color: "#999" }}>(optional)</span></label>
+                <input id="ocd-abn" style={S.input} value={abn} onChange={e => setAbn(e.target.value)} placeholder="e.g. 51 824 753 556" inputMode="numeric" autoComplete="off" />
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={S.label} htmlFor="ocd-website">Website <span style={{ fontWeight: 400, color: "#999" }}>(optional)</span></label>
@@ -863,6 +870,9 @@ export default function OrgClarityDiagnostic() {
                   {report.industry && `${report.industry} · `}
                   {new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}
                 </p>
+                {verifiedIdentity(report) && (
+                  <p style={{ ...S.reportMeta, marginTop: 4, fontSize: 11, opacity: 0.85 }}>{verifiedIdentity(report)}</p>
+                )}
               </div>
 
               <div style={S.reportBody}>
