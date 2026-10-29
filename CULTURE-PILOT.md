@@ -14,6 +14,15 @@ Edit `lib/culture/pilots.js`: copy an entry, set `org`, the real `teams` list, 4
 ## Downloading responses
 `https://<your-app>.vercel.app/api/culture-export?pilot=padre&key=<CULTURE_ADMIN_KEY>` downloads a CSV (one row per response, one column per item). Add `&format=json` for the raw records.
 
+## Leader survey (named)
+Link: `https://<your-app>.vercel.app/culture/leader?pilot=<code>`. For owners, senior leaders and department or site leads; they take this instead of the staff survey. Covers purpose, strategy, culture now and needed, keep/change, and decision rights (should, check, does today). Responses are stored in their own list (`ecf:leaders`).
+- Each pilot needs `purpose` (from the Org Clarity Diagnostic) and `roles` (the exact JD titles the diagnostic assessed) in `lib/culture/pilots.js`. **Padre's `roles` list is empty until the titles are added**, so leaders can only choose "My role isn't listed" or "I don't have a JD".
+- Export: add `&survey=leader` to the export link.
+- When leader responses exist, the results view uses the leadership team as the benchmark instead of the owner questions in the staff survey, and adds a Leadership section.
+
+## Strategy → culture mapping (provisional)
+`lib/culture/mapping.js`: sector floor + value-discipline spike (12 points, secondary 6) + volatility tilt (8 points at ≥3.5 or ≤2.0). Floors follow the "Draft sector floors" table in the Survey Item Bank doc. All numbers are provisional until the pilot data calibrates them.
+
 ## Results view
 `https://<your-app>.vercel.app/culture/results`. Enter `CULTURE_ADMIN_KEY` (kept only for that browser tab), pick the organisation. Shows aggregates only:
 - **Fingerprint:** staff points split and scenario profile against the owner's view of now and of what the business needs, on the 8-style circumplex.

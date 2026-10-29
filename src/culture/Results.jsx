@@ -161,12 +161,13 @@ const textFor = (list, id) => list.find(x => x.id === id)?.text || id || "-";
 
 // ─── Report ──────────────────────────────────────────────────────────────────
 function Report({ data }) {
-  const o = data.owners, staff = data.staff;
+  const o = data.owners, staff = data.staff, L = data.leaders;
+  const bench = L ? "Leaders" : "Owner";
   const enough = !staff.suppressed;
   const series = [
     { label: `Staff, how it works now (n=${staff.n})`, profile: enough ? staff.partA : null, color: NAVY, fill: NAVY },
-    { label: "Owner, what the business needs", profile: o?.intended, color: CAMEL, dash: "6 4" },
-    { label: "Owner, how it works now", profile: o?.current, color: "#6F9CC2", dash: "2 3" },
+    { label: `${bench}, what the business needs`, profile: o?.intended, color: CAMEL, dash: "6 4" },
+    { label: `${bench}, how it works now`, profile: o?.current, color: "#6F9CC2", dash: "2 3" },
   ];
   const gap = c => (enough && o?.intended ? Math.round(staff.partA[c] - o.intended[c]) : null);
 
@@ -189,7 +190,7 @@ function Report({ data }) {
           <table className="ecr-table">
             <thead><tr>
               <th>Style</th><th className="num">Staff now</th><th className="num">Staff stories</th>
-              <th className="num">Owner: now</th><th className="num">Owner: needed</th><th className="num">Gap</th>
+              <th className="num">{bench}: now</th><th className="num">{bench}: needed</th><th className="num">Gap</th>
             </tr></thead>
             <tbody>
               {CODES.map(c => {
@@ -210,23 +211,26 @@ function Report({ data }) {
         </div>
         <p style={{ ...S.hint, marginTop: 10 }}>
           Points out of 100, averaged. "Staff now" is the points split (Part A). "Staff stories" comes from the ten recent-experience scenarios, weighted by how typical each was.
-          Gap = staff now minus owner's needed; red means more of that style than the business needs, blue means less.
+          Gap = staff now minus {L ? "leaders'" : "the owner's"} needed; red means more of that style than the business needs, blue means less.
         </p>
         {enough && <p style={S.p}><strong>Staff describe:</strong> {leanText(staff.lean)}.</p>}
-        {o?.intendedLean && <p style={S.p}><strong>The owner wants:</strong> {leanText(o.intendedLean)}.</p>}
+        {o?.intendedLean && <p style={S.p}><strong>{L ? "The leadership team wants" : "The owner wants"}:</strong> {leanText(o.intendedLean)}.</p>}
+        {data.benchmark && <p style={S.hint}>Benchmark: {data.benchmark.label}{L ? ", from the leader survey" : ", from the owner questions in the staff survey"}.</p>}
       </Card>
 
       <Card kicker="2 · Fit" title="How closely the pieces line up">
         <div style={S.tiles}>
-          <FitTile label="Staff now vs owner's needed" value={data.fit.staffVsIntended} help="The headline gap: the culture staff experience against the one the strategy needs." />
-          <FitTile label="Staff now vs owner's view of now" value={data.fit.staffVsOwnerView} help="Does the owner see today's culture the way staff do? A low score is a blind spot." />
-          <FitTile label="Owner's now vs owner's needed" value={data.fit.ownerViewVsIntended} help="The change the owner believes is needed." />
+          <FitTile label={`Staff now vs ${L ? "leaders'" : "owner's"} needed`} value={data.fit.staffVsIntended} help="The headline gap: the culture staff experience against the one the strategy needs." />
+          <FitTile label={`Staff now vs ${L ? "leaders'" : "owner's"} view of now`} value={data.fit.staffVsOwnerView} help={`Do ${L ? "leaders" : "owners"} see today's culture the way staff do? A low score is a blind spot.`} />
+          <FitTile label={`${L ? "Leaders'" : "Owner's"} now vs needed`} value={data.fit.ownerViewVsIntended} help={`The change ${L ? "leaders believe" : "the owner believes"} is needed.`} />
           <FitTile label="Says vs stories (staff)" value={staff.saysVsStories ?? null} help="Whether the points split matches what staff describe actually happening. Low means espoused and enacted culture differ." />
         </div>
         <p style={{ ...S.hint, marginTop: 10 }}>100 = the same shape, 50 = unrelated, 0 = opposite. Bands are provisional until the pilot data calibrates them.</p>
       </Card>
 
-      <Card kicker="3 · Breakdown" title="By site and by level">
+      {L && <Leadership L={L} />}
+
+      <Card kicker={L ? "4 · Breakdown" : "3 · Breakdown"} title="By site and by level">
         {!enough ? <p style={S.p}>Available once {data.minGroup} or more staff have responded.</p> : (
           <>
             <div className="ecr-scroll">
@@ -259,7 +263,7 @@ function Report({ data }) {
         )}
       </Card>
 
-      <Card kicker="4 · Decision rights" title="Who actually decides">
+      <Card kicker={L ? "5 · Decision rights" : "4 · Decision rights"} title="Who actually decides">
         {data.decisions.suppressed ? <p style={S.p}>Available once {data.minGroup} or more staff have responded.</p> : data.decisions.areas.map(a => (
           <div key={a.area} style={{ padding: "12px 0", borderBottom: "1px solid #EEF1F4" }}>
             <div style={{ fontWeight: 700, color: NAVY, fontSize: 15, marginBottom: 4 }}>Who decides on {a.label}?</div>
@@ -278,7 +282,7 @@ function Report({ data }) {
         )}
       </Card>
 
-      {o?.strategy?.length > 0 && (
+      {!L && o?.strategy?.length > 0 && (
         <Card kicker="5 · Strategy inputs" title="What the owner said about the business">
           {o.strategy.map((s, i) => (
             <div key={i} className="ecr-scroll">
@@ -296,10 +300,109 @@ function Report({ data }) {
         </Card>
       )}
 
-      <Card kicker="6 · Data quality" title="Is the survey working?">
+      <Card kicker={L ? "6 · Data quality" : "6 · Data quality"} title="Is the survey working?">
         {data.quality.suppressed ? <p style={S.p}>Available once {data.minGroup} or more staff have responded.</p> : <Quality q={data.quality} />}
       </Card>
     </>
+  );
+}
+
+// ─── Leadership (leader survey) ──────────────────────────────────────────────
+function Leadership({ L }) {
+  const ag = fitBand(L.agreement.mean), sd = fitBand(L.statedVsDerived.fit);
+  return (
+    <Card kicker="3 · Leadership" title="Do the leaders agree, and does it match the strategy?">
+      <div className="ecr-scroll">
+        <table className="ecr-table">
+          <thead><tr><th>Leader</th><th>Role</th><th>Wins customers by</th><th>Priority</th><th className="num">Change agenda</th><th className="num">Needed vs strategy</th></tr></thead>
+          <tbody>{L.people.map(p => (
+            <tr key={p.name}>
+              <td><strong>{p.name}</strong><div style={S.hint}>{p.level}{p.team ? `, ${p.team}` : ""}</div></td>
+              <td>{p.role}</td>
+              <td>{p.discipline}<div style={S.hint}>then {p.secondary.toLowerCase()}</div></td>
+              <td>{p.archetype}</td>
+              <td className="num">{p.changeAgenda ?? "–"}</td>
+              <td className="num" style={{ color: fitBand(p.statedVsDerived).color, fontWeight: 700 }}>{p.statedVsDerived ?? "–"}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p style={{ ...S.hint, marginTop: 6 }}>Change agenda: each leader's now against needed (lower = more change wanted). Needed vs strategy: what they say the business needs against what their own strategy answers imply.</p>
+
+      <div style={S.tiles}>
+        <div style={S.tile}>
+          <div style={{ fontSize: 13, color: "#5A6B7B", marginBottom: 6 }}>Leaders agree on the culture needed</div>
+          <div style={{ fontSize: 30, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{L.agreement.mean ?? "–"}<span style={{ fontSize: 14, color: "#8A97A5" }}>{L.agreement.mean != null ? " / 100" : ""}</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: ag.color, marginTop: 6 }}>{L.n < 2 ? "Needs two or more leaders" : ag.label}</div>
+          {L.agreement.pairs.length > 1 && <div style={{ ...S.hint, marginTop: 6 }}>Lowest pair: {L.agreement.min}</div>}
+        </div>
+        <div style={S.tile}>
+          <div style={{ fontSize: 13, color: "#5A6B7B", marginBottom: 6 }}>Agree on how the business wins</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: L.sameDiscipline ? "#1E7B4B" : "#A93226" }}>{L.sameDiscipline ? "Yes" : "No"}</div>
+          <div style={{ ...S.hint, marginTop: 6 }}>{L.disciplines.map(d => `${d.count} × ${d.text.split(":")[0]}`).join(" · ")}</div>
+        </div>
+        <div style={S.tile}>
+          <div style={{ fontSize: 13, color: "#5A6B7B", marginBottom: 6 }}>Culture needed vs culture the strategy implies</div>
+          <div style={{ fontSize: 30, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{L.statedVsDerived.fit ?? "–"}<span style={{ fontSize: 14, color: "#8A97A5" }}> / 100</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: sd.color, marginTop: 6 }}>{sd.label}</div>
+        </div>
+      </div>
+
+      <h3 style={{ ...S.h2, fontSize: 17, marginTop: 20 }}>What the leaders say is needed, against what their strategy implies</h3>
+      <Circumplex series={[
+        { label: "Leaders: needed", profile: L.needed, color: CAMEL, fill: CAMEL },
+        { label: "Strategy implies (provisional)", profile: L.derived, color: NAVY, dash: "6 4" },
+      ]} />
+      <div className="ecr-scroll" style={{ marginTop: 10 }}>
+        <table className="ecr-table">
+          <thead><tr><th>Style</th><th className="num">Leaders: needed</th><th className="num">Strategy implies</th><th className="num">Difference</th></tr></thead>
+          <tbody>{L.statedVsDerived.styles.map(x => (
+            <tr key={x.code} style={x.flag ? { background: "#FBF5EA" } : undefined}>
+              <td><strong>{x.style}</strong></td><td className="num">{x.stated ?? "–"}</td><td className="num">{x.derived ?? "–"}</td>
+              <td className="num" style={{ fontWeight: x.flag ? 700 : 400 }}>{x.diff == null ? "–" : x.diff > 0 ? `+${x.diff}` : x.diff}{x.flag ? " · discuss" : ""}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p style={{ ...S.hint, marginTop: 6 }}>The strategy profile is worked out from each leader's industry, how they win customers and how fast the market is changing (mapping {L.mappingVersion}). Differences of 10 or more are flagged for discussion, not as errors.</p>
+
+      <h3 style={{ ...S.h2, fontSize: 17, marginTop: 20 }}>Decision rights: intended, believed and experienced</h3>
+      <div className="ecr-scroll">
+        <table className="ecr-table">
+          <thead><tr><th>Decision</th><th>Leaders: should decide</th><th>Leaders: decides today</th><th>Staff: decides today</th><th className="num">Staff matching "should"</th></tr></thead>
+          <tbody>{L.decisions.map(d => (
+            <tr key={d.area}>
+              <td><strong>{d.label.charAt(0).toUpperCase() + d.label.slice(1)}</strong></td>
+              <td>{d.shouldMode || "–"}{d.leadersAgreeOnShould === false && <div style={{ ...S.hint, color: "#A93226" }}>Leaders disagree</div>}</td>
+              <td>{d.doesMode || "–"}{d.shouldMatchesDoes === false && <div style={{ ...S.hint, color: "#B7791F" }}>Differs from intent</div>}</td>
+              <td>{d.staffTop || "–"}</td>
+              <td className="num">{d.staffAgreeWithShould != null ? `${d.staffAgreeWithShould}%` : "–"}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p style={{ ...S.hint, marginTop: 6 }}>Staff columns appear once five or more staff have responded. The JD column joins this table when the JD tool's decision-rights pass is added.</p>
+
+      {(L.noJd.length > 0 || L.unclaimedRoles.length > 0) && (
+        <div style={S.note}>
+          {L.noJd.length > 0 && <div><strong>Leaders without a JD:</strong> {L.noJd.join(", ")}.</div>}
+          {L.unclaimedRoles.length > 0 && <div><strong>JD roles no leader claimed:</strong> {L.unclaimedRoles.join(", ")}.</div>}
+        </div>
+      )}
+
+      <details style={{ marginTop: 16 }} open>
+        <summary>In their words</summary>
+        {L.purpose.statement && <p style={{ ...S.p, marginTop: 8 }}>Purpose statement rated <strong>{L.purpose.meanRating ?? "–"} / 5</strong> on average: <em>{L.purpose.statement}</em></p>}
+        <div className="ecr-scroll">
+          <table className="ecr-table" style={{ marginTop: 8 }}>
+            <thead><tr><th>Leader</th><th>Must do better than anyone</th><th>Keep</th><th>Change</th><th>Purpose guides decisions</th></tr></thead>
+            <tbody>{L.people.map(p => (
+              <tr key={p.name}><td><strong>{p.name}</strong></td><td>{p.mustDo || p.ownPurpose || "–"}</td><td>{p.keep || "–"}</td><td>{p.change || "–"}</td><td>{p.guides}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </details>
+    </Card>
   );
 }
 
