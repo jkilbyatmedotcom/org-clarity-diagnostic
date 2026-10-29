@@ -928,7 +928,7 @@ export default function OrgClarityDiagnostic() {
                         <p style={{ fontSize: 14, fontWeight: 600, color: NAVY, lineHeight: 1.5, margin: 0 }}>{a.fixFirst}</p>
                       </div>
                       <p style={{ fontSize: 11, color: "#888", marginTop: 10 }}>
-                        Based on {(a.pagesRead || []).length} page{(a.pagesRead || []).length === 1 ? "" : "s"} of {a.url}
+                        {a.websiteRole ? `Website role: ${a.websiteRole} · ` : ""}Based on {(a.pagesRead || []).length} page{(a.pagesRead || []).length === 1 ? "" : "s"} of {a.url}
                       </p>
                     </div>
                   );
