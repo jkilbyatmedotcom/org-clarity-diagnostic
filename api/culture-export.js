@@ -7,9 +7,11 @@ import { STATEMENTS, SCENARIOS, STRATEGY } from "../lib/culture/instrument.js";
 // A browser download can pass ?key=… instead of the header.
 
 function keyOk(provided) {
-  const expected = process.env.CULTURE_ADMIN_KEY;
-  if (!expected || !provided) return false;
-  const a = Buffer.from(String(provided)), b = Buffer.from(expected);
+  // Trim both sides: pasted keys often carry a stray space or line break.
+  const expected = String(process.env.CULTURE_ADMIN_KEY || "").trim();
+  const given = String(provided || "").trim();
+  if (!expected || !given) return false;
+  const a = Buffer.from(given), b = Buffer.from(expected);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
@@ -42,7 +44,10 @@ export function toCsv(rows) {
 
 export default async function handler(req, res) {
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).end(); }
-  if (!keyOk(req.headers["x-admin-key"] || req.query?.key)) return res.status(401).json({ error: { message: "Unauthorised" } });
+  if (!String(process.env.CULTURE_ADMIN_KEY || "").trim()) return res.status(503).json({ error: { message: "Admin key not configured on this deployment" } });
+  const provided = req.headers["x-admin-key"] || req.query?.key;
+  if (!provided) return res.status(401).json({ error: { message: "Unauthorised: no key supplied" } });
+  if (!keyOk(provided)) return res.status(401).json({ error: { message: "Unauthorised: key does not match" } });
   if (!storageConfigured()) return res.status(503).json({ error: { message: "Storage not configured" } });
 
   const pilot = String(req.query?.pilot || "").toLowerCase();
