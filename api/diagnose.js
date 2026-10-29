@@ -2,12 +2,13 @@ import { buildPrompt } from "../lib/prompt.js";
 import { deliverReport } from "../lib/deliver.js";
 import { readWebsite } from "../lib/website.js";
 import { buildAlignmentPrompt, ALIGNMENT_MAX_TOKENS } from "../lib/alignment.js";
+import { normaliseDecisionRights } from "../lib/decisionRights.js";
 import { lookupBusiness, cleanAbn, isValidAbn } from "../lib/abn.js";
 
 // ─── Fixed server-side settings ───────────────────────────────────────────────
 // The browser can no longer choose the model, token budget or prompt.
 const MODEL = "claude-sonnet-4-6";
-const MAX_TOKENS = 8000;
+const MAX_TOKENS = 10000; // headroom for the decision-rights grid
 
 const LIMITS = {
   roles: 10,
@@ -180,6 +181,8 @@ export default async function handler(req, res) {
       ? "The diagnostic service is busy. Please try again in a minute."
       : "The diagnostic couldn't be completed. Please try again — if it keeps happening, try fewer roles or shorter documents.");
   }
+
+  report.decisionRights = normaliseDecisionRights(report.decisionRights, report);
 
   const [alignment, register] = await Promise.all([alignmentPromise, registerPromise]);
   if (alignment) report.purposeMarketAlignment = alignment;

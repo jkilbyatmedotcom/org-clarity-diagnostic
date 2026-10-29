@@ -1,5 +1,9 @@
 import { useState, useRef } from "react";
 import { renderReportHtml, verifiedIdentity } from "../lib/reportHtml.js";
+import { DR_AREAS } from "../lib/decisionRights.js";
+
+const DrDot = () => <span aria-label="Authority stated" style={{ display: "inline-block", width: 12, height: 12, borderRadius: 6, background: "#0A2A43", verticalAlign: "middle" }} />;
+const DrRing = () => <span aria-label="Implied" style={{ display: "inline-block", width: 8, height: 8, borderRadius: 6, border: "2px solid #C9A46A", verticalAlign: "middle" }} />;
 
 // ─── Brand Palette ───────────────────────────────────────────────────────────
 const NAVY    = "#0A2A43";
@@ -978,6 +982,47 @@ export default function OrgClarityDiagnostic() {
                     </div>
                   ))}
                 </div>
+
+                {/* Decision rights (from the JDs) */}
+                {report.decisionRights?.roles?.length > 0 && (
+                  <div style={S.passBlock}>
+                    <p style={S.passTitle}>Decision Rights</p>
+                    <h3 style={S.passHeading}>Who your JDs say decides</h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ borderBottom: `2px solid ${SAND}` }}></th>
+                            {Object.entries(DR_AREAS).map(([code, lbl]) => (
+                              <th key={code} style={{ padding: "6px 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "#5A6B7B", borderBottom: `2px solid ${SAND}`, verticalAlign: "bottom", fontWeight: 700 }}>{lbl}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.decisionRights.roles.map(r => (
+                            <tr key={r.roleTitle}>
+                              <td style={{ padding: "8px 6px", fontWeight: 700, color: NAVY, borderBottom: "1px solid #EEF1F4" }}>{r.roleTitle}</td>
+                              {Object.keys(DR_AREAS).map(code => (
+                                <td key={code} title={r.areas[code]} style={{ textAlign: "center", padding: "8px 4px", borderBottom: "1px solid #EEF1F4", fontSize: 15, color: r.areas[code] === "explicit" ? NAVY : r.areas[code] === "implied" ? CAMEL : "#BBB" }}>
+                                  {r.areas[code] === "explicit" ? <DrDot /> : r.areas[code] === "implied" ? <DrRing /> : "–"}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p style={{ fontSize: 11, color: "#666", margin: "8px 0 12px", display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}><span><DrDot /> Authority stated</span><span><DrRing /> Implied by the role, not stated</span><span>– Not covered</span></p>
+                    {report.decisionRights.unowned?.length > 0 && (
+                      <p style={S.passText}><strong>No role holds stated authority for:</strong> {report.decisionRights.unowned.map(c => DR_AREAS[c].toLowerCase()).join(", ")}.</p>
+                    )}
+                    {(report.decisionRights.areas || []).map((a, i) => (
+                      <div key={i} style={{ ...S.findingItem, borderLeft: `4px solid ${CAMEL}` }}>
+                        <strong>{a.label}{a.holder && a.holder !== "No role" ? ` (${a.holder})` : " (no role)"}:</strong> {a.observation}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Pass 3 */}
                 <div style={{ ...S.passBlock, borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>
