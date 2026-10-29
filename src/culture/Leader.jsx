@@ -147,7 +147,14 @@ export default function Leader() {
       </>)}
       <label style={S.label}>Which of these is your role?</label>
       <p style={S.hint}>{roles.length ? "These are the role titles from the organisation's job descriptions." : "Choose the option that fits."}</p>
-      <Choice name="Your role" options={roleOpts} value={st.role} onChange={v => update({ role: v })} />
+      {roleOpts.length > 10 ? (
+        <select className="ecf-input" aria-label="Your role" value={st.role} onChange={e => update({ role: e.target.value })}>
+          <option value="">Choose your role</option>
+          {roleOpts.map(o => <option key={o.id} value={o.id}>{o.text}</option>)}
+        </select>
+      ) : (
+        <Choice name="Your role" options={roleOpts} value={st.role} onChange={v => update({ role: v })} />
+      )}
       {st.role === ROLE_NOT_LISTED && (
         <input className="ecf-input" style={{ marginTop: 4 }} aria-label="Your role title" placeholder="Your role title" value={st.roleOther} onChange={e => update({ roleOther: e.target.value })} />
       )}

@@ -1,6 +1,10 @@
 import { useState, useRef } from "react";
 import { renderReportHtml, verifiedIdentity } from "../lib/reportHtml.js";
 import { DR_AREAS } from "../lib/decisionRights.js";
+import { extractText, titleFromFileName } from "./extractText.js";
+
+const MAX_ROLES = 40;          // must match LIMITS.roles in api/diagnose.js
+const SINGLE_PASS_ROLES = 10;  // above this the server runs large-organisation mode
 
 const DrDot = () => <span aria-label="Authority stated" style={{ display: "inline-block", width: 12, height: 12, borderRadius: 6, background: "#0A2A43", verticalAlign: "middle" }} />;
 const DrRing = () => <span aria-label="Implied" style={{ display: "inline-block", width: 8, height: 8, borderRadius: 6, border: "2px solid #C9A46A", verticalAlign: "middle" }} />;
@@ -500,15 +504,6 @@ function ratingColor(rating) {
   return "#C0392B";
 }
 
-function readFileAsText(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
-    reader.onerror = reject;
-    reader.readAsText(file);
-  });
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function OrgClarityDiagnostic() {
   // Step: "input" | "loading" | "report"
@@ -541,11 +536,14 @@ export default function OrgClarityDiagnostic() {
   const [delivery, setDelivery]         = useState(null);
 
   const fileRefs = useRef({});
+  const bulkRef = useRef(null);
+  const [reading, setReading] = useState(null);   // "Reading 3 of 31 files…"
+  const [fileProblems, setFileProblems] = useState([]);
   const reportRef = useRef(null);
 
   // ── Role helpers ────────────────────────────────────────────────────────────
   function addRole() {
-    if (roles.length >= 10) return;
+    if (roles.length >= MAX_ROLES) return;
     setRoles(r => [...r, { id: Date.now(), title: "", files: [], manualText: "" }]);
   }
 
@@ -557,13 +555,37 @@ export default function OrgClarityDiagnostic() {
     setRoles(r => r.map(x => x.id === id ? { ...x, [field]: value } : x));
   }
 
+  // Reads files one at a time; returns the readable ones and lists the rest.
+  async function readFiles(fileList) {
+    const files = Array.from(fileList);
+    const ok = [], problems = [];
+    for (let i = 0; i < files.length; i++) {
+      if (files.length > 1) setReading(`Reading ${i + 1} of ${files.length} files…`);
+      try { ok.push({ name: files[i].name, text: await extractText(files[i]) }); }
+      catch (err) { problems.push(err.message); }
+    }
+    setReading(null);
+    setFileProblems(problems);
+    return ok;
+  }
+
   async function handleFileUpload(id, files) {
-    const arr = Array.from(files).slice(0, 3);
-    const loaded = await Promise.all(arr.map(async f => ({
-      name: f.name,
-      text: await readFileAsText(f).catch(() => `[Could not read ${f.name}]`),
-    })));
+    const loaded = await readFiles(Array.from(files).slice(0, 3));
     setRoles(r => r.map(x => x.id === id ? { ...x, files: [...x.files, ...loaded] } : x));
+  }
+
+  // One role per file: for organisations uploading a whole JD library.
+  async function handleBulkUpload(files) {
+    const loaded = await readFiles(files);
+    if (!loaded.length) return;
+    setRoles(prev => {
+      const kept = prev.filter(r => r.title.trim() || r.files.length || r.manualText.trim());
+      const room = Math.max(0, MAX_ROLES - kept.length);
+      if (loaded.length > room) setFileProblems(p => [...p, `Only ${MAX_ROLES} roles can be assessed at once, so ${loaded.length - room} file${loaded.length - room === 1 ? " was" : "s were"} left out.`]);
+      const added = loaded.slice(0, room).map((f, i) => ({ id: Date.now() + i, title: titleFromFileName(f.name), files: [f], manualText: "", bulk: true }));
+      const next = [...kept, ...added];
+      return next.length ? next : [{ id: 1, title: "", files: [], manualText: "" }];
+    });
   }
 
   function removeFile(roleId, fileName) {
@@ -589,15 +611,21 @@ export default function OrgClarityDiagnostic() {
 
     setStep("loading");
     setLoadingMsg("Reading your documents and org context...");
+    const large = validRoles.length > SINGLE_PASS_ROLES;
 
-    const timers = [
+    const timers = large ? [
+      setTimeout(() => setLoadingMsg(`Assessing ${validRoles.length} roles in batches — this takes two to three minutes...`), 4000),
+      setTimeout(() => setLoadingMsg("Still assessing roles and reading decision rights..."), 60000),
+      setTimeout(() => setLoadingMsg("Reviewing the whole role set for gaps and overlaps..."), 100000),
+      setTimeout(() => setLoadingMsg("Building your report and sending your copy..."), 150000),
+    ] : [
       setTimeout(() => setLoadingMsg("Running Pass 1 — assessing your purpose statement..."), 4000),
       setTimeout(() => setLoadingMsg("Running Pass 2 — assessing individual roles..."), 10000),
       setTimeout(() => setLoadingMsg("Running Pass 3 — mapping collective alignment..."), 18000),
       setTimeout(() => setLoadingMsg("Building your report and sending your copy..."), 26000),
     ];
     const controller = new AbortController();
-    const hardTimeout = setTimeout(() => controller.abort(), 120000);
+    const hardTimeout = setTimeout(() => controller.abort(), large ? 310000 : 120000);
     const clearTimers = () => { timers.forEach(clearTimeout); clearTimeout(hardTimeout); };
 
     try {
@@ -771,11 +799,40 @@ export default function OrgClarityDiagnostic() {
             <div style={S.card}>
               <h2 style={S.sectionTitle}>Your roles</h2>
               <p style={S.sectionHint}>
-                Upload up to 10 JDs. Any format — the diagnostic will find what it needs.
-                No JD? Enter what you know about the role manually.
+                Upload up to {MAX_ROLES} JDs as PDF, Word (.docx) or text. No JD? Enter what you know about the role manually.
               </p>
 
-              {roles.map((role, idx) => (
+              <div
+                style={{ ...S.uploadBox, background: "#F0F6FB", borderColor: LBLUE, marginBottom: 16 }}
+                onClick={() => bulkRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); handleBulkUpload(e.dataTransfer.files); }}
+              >
+                <p style={{ ...S.uploadText, fontWeight: 700, color: NAVY }}>Got a whole set of JDs? Upload them all at once</p>
+                <p style={{ ...S.uploadText, fontSize: 12 }}>One file per role · select or drop up to {MAX_ROLES} files</p>
+                <input type="file" accept=".txt,.docx,.pdf,.rtf" multiple style={{ display: "none" }} ref={bulkRef}
+                  aria-label="Upload all JDs" onChange={e => { handleBulkUpload(e.target.files); e.target.value = ""; }} />
+              </div>
+              {reading && <p style={{ ...S.sectionHint, color: NAVY, fontWeight: 700 }} aria-live="polite">{reading}</p>}
+              {fileProblems.length > 0 && (
+                <div role="alert" style={{ background: "#FFF8EC", border: `1.5px solid ${CAMEL}`, borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, lineHeight: 1.5 }}>
+                  {fileProblems.map((p, i) => <div key={i}>{p}</div>)}
+                </div>
+              )}
+              {roles.length > SINGLE_PASS_ROLES && (
+                <p style={{ ...S.sectionHint, background: "#F4F7FA", padding: "10px 14px", borderRadius: 8 }}>
+                  <strong>{roles.length} roles.</strong> Larger role sets are assessed in batches and then reviewed together, so the report takes two to three minutes. Check the role titles below; they come from the file names.
+                </p>
+              )}
+
+              {roles.map((role, idx) => role.bulk ? (
+                <div key={role.id} style={{ ...S.roleCard, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ ...S.roleNum, minWidth: 28 }}>{idx + 1}</span>
+                  <input style={{ ...S.input, flex: 1 }} aria-label={`Role ${idx + 1} title`} value={role.title} onChange={e => updateRole(role.id, "title", e.target.value)} />
+                  <span style={{ fontSize: 12, color: "#888", flex: "0 1 180px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={role.files[0]?.name}>✓ {role.files[0]?.name}</span>
+                  <button style={S.removeBtn} aria-label={`Remove ${role.title}`} onClick={() => removeRole(role.id)}>×</button>
+                </div>
+              ) : (
                 <div key={role.id} style={S.roleCard}>
                   <div style={S.roleHeader}>
                     <span style={S.roleNum}>Role {idx + 1}</span>
@@ -801,10 +858,10 @@ export default function OrgClarityDiagnostic() {
                     onDragOver={e => e.preventDefault()}
                     onDrop={e => { e.preventDefault(); handleFileUpload(role.id, e.dataTransfer.files); }}
                   >
-                    <p style={S.uploadText}>📄 Click to upload JD or drag & drop &nbsp;·&nbsp; .txt, .doc, .docx, .pdf accepted</p>
+                    <p style={S.uploadText}>📄 Click to upload JD or drag & drop &nbsp;·&nbsp; PDF, .docx or .txt</p>
                     <input
                       type="file"
-                      accept=".txt,.doc,.docx,.pdf,.rtf"
+                      accept=".txt,.docx,.pdf,.rtf"
                       multiple
                       style={{ display: "none" }}
                       ref={el => fileRefs.current[role.id] = el}
@@ -834,7 +891,7 @@ export default function OrgClarityDiagnostic() {
                 </div>
               ))}
 
-              {roles.length < 10 && (
+              {roles.length < MAX_ROLES && (
                 <button style={S.addBtn} onClick={addRole}>+ Add another role</button>
               )}
             </div>

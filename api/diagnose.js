@@ -3,6 +3,7 @@ import { deliverReport } from "../lib/deliver.js";
 import { readWebsite } from "../lib/website.js";
 import { buildAlignmentPrompt, ALIGNMENT_MAX_TOKENS } from "../lib/alignment.js";
 import { normaliseDecisionRights } from "../lib/decisionRights.js";
+import { runLargeOrg, SINGLE_REQUEST_MAX_ROLES } from "../lib/largeOrg.js";
 import { lookupBusiness, cleanAbn, isValidAbn } from "../lib/abn.js";
 
 // ─── Fixed server-side settings ───────────────────────────────────────────────
@@ -11,10 +12,10 @@ const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 10000; // headroom for the decision-rights grid
 
 const LIMITS = {
-  roles: 10,
+  roles: 40,              // over 10 runs in large-organisation mode
   filesPerRole: 3,
   charsPerFile: 40000,    // longer files are truncated, not rejected
-  totalChars: 250000,     // whole request
+  totalChars: 400000,     // whole request
   field: 4000,            // purpose text, scaffold answers, manual role text
   short: 200,             // names, titles, industry
 };
@@ -174,7 +175,9 @@ export default async function handler(req, res) {
 
   let report;
   try {
-    report = await callClaude(buildPrompt(input), MAX_TOKENS);
+    report = input.roles.length > SINGLE_REQUEST_MAX_ROLES
+      ? await runLargeOrg(input, callClaude)
+      : await callClaude(buildPrompt(input), MAX_TOKENS);
   } catch (err) {
     console.error("[diagnose] failed", err.detail || err);
     return fail(res, 502, err.detail

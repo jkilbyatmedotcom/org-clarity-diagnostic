@@ -44,3 +44,8 @@ HubSpot stopped allowing new private apps in October 2026. Use a Service Key ins
 
 ## Decision rights (from the JDs)
 The diagnostic reads each JD against seven decision areas (pricing or discounts, hiring, spending above a limit, complaints or refunds, rosters and allocation, suppliers, new products or offers) and marks each role's authority as stated, implied or not covered. The same area codes are used by the culture and leader surveys, so the JD view compares directly with what leaders intend and what staff experience. The output is checked and cleaned on the server (`lib/decisionRights.js`); a malformed answer drops the section rather than breaking the report. The main call's output budget is 10,000 tokens to make room for the grid.
+
+## Large organisations (11–40 roles)
+Upload a whole JD library at once with "Upload them all at once" (one file per role). Up to 10 roles run as one request. From 11 to 40, the server runs large-organisation mode (`lib/largeOrg.js`): roles are assessed in parallel batches of 8 (role assessments, decision rights and a short summary of each), then one final request reviews every summary together for the purpose assessment, gaps and overlaps. A failed batch is retried once. A 31-role run takes about two to three minutes; `vercel.json` allows the function up to 300 seconds.
+
+JD text is read in the browser: PDF (pdf.js), Word .docx (mammoth) and text. Older .doc files and scanned images can't be read and are listed for the person to resave.
