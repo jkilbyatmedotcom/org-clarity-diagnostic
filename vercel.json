@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/diagnose.js": { "maxDuration": 300 }
+  },
   "rewrites": [
     { "source": "/culture/results", "destination": "/culture-results.html" },
     { "source": "/culture/leader", "destination": "/culture-leader.html" },
