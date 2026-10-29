@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { renderReportHtml } from "../lib/reportHtml.js";
 
 // ─── Brand Palette ───────────────────────────────────────────────────────────
 const NAVY    = "#0A2A43";
@@ -401,26 +402,30 @@ const S = {
     gap: 12,
     flexWrap: "wrap",
   },
-  emailInput: {
-    flex: 1,
-    minWidth: 200,
-    padding: "10px 14px",
-    borderRadius: 5,
-    border: "none",
-    fontSize: 14,
-    fontFamily: "Calibri, 'Segoe UI', sans-serif",
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 16,
+    marginBottom: 16,
   },
-  camelBtn: {
-    background: CAMEL,
-    color: WHITE,
-    border: "none",
-    borderRadius: 5,
-    padding: "10px 20px",
-    fontSize: 14,
-    fontWeight: 700,
-    fontFamily: "Calibri, 'Segoe UI', sans-serif",
+  checkRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    fontSize: 13,
+    color: "#555",
+    lineHeight: 1.5,
     cursor: "pointer",
-    whiteSpace: "nowrap",
+  },
+  sentBox: {
+    background: "#EEF6EF",
+    border: "1.5px solid #27AE60",
+    borderRadius: 6,
+    padding: "14px 18px",
+    fontSize: 14,
+    color: "#1E7A44",
+    marginBottom: 16,
+    lineHeight: 1.5,
   },
   divider: {
     border: "none",
@@ -504,7 +509,12 @@ export default function OrgClarityDiagnostic() {
   const [error, setError]     = useState(null);
   const [loadingMsg, setLoadingMsg] = useState("");
 
-  // CTA state — booking link only, no email capture
+  // Contact details — required before the diagnostic runs
+  const [contactName, setContactName]   = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [optIn, setOptIn]               = useState(false);
+  const [website, setWebsite]           = useState(""); // honeypot, hidden from people
+  const [delivery, setDelivery]         = useState(null);
 
   const fileRefs = useRef({});
   const reportRef = useRef(null);
@@ -538,115 +548,13 @@ export default function OrgClarityDiagnostic() {
       : x));
   }
 
-  // ── Build prompt ────────────────────────────────────────────────────────────
-  function buildPrompt() {
-    const purpose = purposeMode === "have"
-      ? purposeText
-      : `[Constructed from founder inputs]\nWhat: ${scaffold.what}\nFor whom: ${scaffold.whom}\nOutcome: ${scaffold.outcome}\nWhy it matters: ${scaffold.why}`;
-
-    const rolesText = roles.map((r, i) => {
-      const content = r.files.length > 0
-        ? r.files.map(f => `File: ${f.name}\n${f.text}`).join("\n\n")
-        : r.manualText;
-      return `ROLE ${i + 1}: ${r.title || "Untitled"}\n${content}`;
-    }).join("\n\n---\n\n");
-
-    return `You are an expert organisational design advisor working with SME owners. Your job is to run a three-pass diagnostic on an organisation's purpose and role set, then return a structured JSON report.
-
-ORGANISATION: ${orgName || "Not specified"}
-INDUSTRY: ${industry || "Not specified"}
-PURPOSE MODE: ${purposeMode === "have" ? "Owner provided" : "Constructed from scaffold"}
-ORG PURPOSE INPUT:
-${purpose}
-
-ROLES PROVIDED:
-${rolesText}
-
----
-
-Run three diagnostic passes and return ONLY valid JSON in this exact structure (no markdown, no preamble):
-
-{
-  "orgName": "string",
-  "industry": "string",
-  "purposeAssessment": {
-    "purposeStatement": "string — the org purpose as provided or constructed. If constructed, synthesise the scaffold inputs into a single clear purpose statement.",
-    "rating": "Strong | Partial | Weak",
-    "criteria": {
-      "specificity": "one sentence assessment",
-      "directionality": "one sentence assessment",
-      "distinctiveness": "one sentence assessment",
-      "anchoringUtility": "one sentence assessment"
-    },
-    "headline": "one plain-language sentence that names the most important thing about this purpose statement — written as if spoken directly to the founder",
-    "coaching": "2-3 sentences of direct coaching if the statement is Partial or Weak. Empty string if Strong."
-  },
-  "roleAssessments": [
-    {
-      "roleTitle": "string",
-      "purposeRating": "Strong | Partial | Weak",
-      "kraRating": "Strong | Partial | Weak | Not provided",
-      "headline": "one plain-language sentence about this role — specific, direct, written as if spoken to the founder. Name the actual gap or strength. Not generic.",
-      "purposeObservation": "one sentence on role purpose quality",
-      "kraObservation": "one sentence on KRA quality. Assess whether KRAs have both leading measures (inputs, activity, system health — e.g. audit cadence, training completion, pipeline activity) and lagging measures (outcomes, results — e.g. compliance rate, revenue, defect rate). If only lagging measures are present, name what leading measure types are missing. Do not treat outcome measurement as a weakness — the gap is absence of leading measures alongside lagging ones.",
-      "recommendation": "one sentence on what to do — Tune-Up, Rebuild, or No action needed"
-    }
-  ],
-  "collectiveAlignment": {
-    "coverageGaps": [
-      {
-        "function": "name of the function/capability missing",
-        "observation": "one plain-language sentence — specific to this org, written as if spoken to the founder. Name what the business cannot do or is at risk of because nobody owns this. CRITICAL: only flag a coverage gap if the function is genuinely absent across ALL provided JDs. If a function appears under a role title like Operations, Supply Chain, or similar, read the full JD before concluding it is unowned. Do not infer a gap from role titles alone — derive it only from what is explicitly missing after reading every role provided."
-      }
-    ],
-    "overlapGaps": [
-      {
-        "roles": "role names involved",
-        "observation": "two sentences. First: name the specific shared accountability and why it creates a boundary problem. Second: identify whether the overlap needs a consolidation owner — a single role accountable for the combined or reported position of that accountability across the business — and name which existing role is most logically positioned to hold it given the full role set provided. Do not stop at describing the overlap. Arrive at the resolution logic."
-      }
-    ],
-    "alignmentGaps": [
-      {
-        "role": "role title",
-        "observation": "one plain-language sentence on how this role's purpose fails to connect to the org purpose"
-      }
-    ],
-    "structuralHealth": "Strong | Developing | At Risk",
-    "summaryObservation": "2-3 sentences. Plain language. Specific to this org. Name the most important structural finding and what it means for the business's ability to scale or operate without founder dependency.",
-    "whatThisMeansInPractice": "One paragraph, 3-5 sentences. Translate the combined diagnostic findings into lived experience language — the friction, the symptoms, the things the founder feels day to day but may not have connected to structure. Write as if describing something the owner already knows but hasn't been able to name. Specific to this org. Not generic. No consulting language. Examples of the register: 'This is why your ops manager keeps coming back to you for decisions that should be theirs to make.' 'This is why hiring hasn't fixed the capacity problem.' 'This is why sales growth feels harder than the product deserves.'",
-    "whatRemainsImpossible": [
-      {
-        "gap": "name of the specific gap this refers to — role title, coverage gap, or structural issue",
-        "observation": "One sentence. Name the specific thing that cannot happen while this gap exists. Not a prediction. Not a motivational statement. A structural inevitability. Frame as what the business cannot do, cannot reach, or cannot sustain — not what it could achieve if fixed. Examples: 'The business cannot scale past its current revenue ceiling without the founder in every client conversation.' 'A second location is not viable while nobody owns the operational rhythm.' 'The next hire will fail for the same reason the last one did.'"
-      }
-    ],
-    "nextStep": "one sentence on the most important single action this founder should take — specific, not generic"
-  }
-}
-
-CRITICAL INSTRUCTIONS:
-- Every observation and headline must be written at the level of RECOGNITION, not analysis. The founder should read it and think "that's exactly what's happening" not "that's an interesting observation."
-- Never write generic consulting language. No "it is recommended that", no "this role would benefit from", no "consider exploring".
-- Write as if you know this business. Be direct. Be specific. Use the actual role titles and org context provided.
-- If the purpose was constructed from scaffold inputs, synthesise it into a clean, single purpose statement before assessing it.
-- If no KRAs are present in the uploaded documents, set kraRating to "Not provided" and note this in kraObservation.
-- PURPOSE ASSESSMENT STANDARD: You are assessing operational purpose, not vision. A purpose that describes sustained, reliable provision of something valuable is strong if it clearly anchors role design — regardless of whether it describes transformation, a winning condition, or an end state. Do not penalise a purpose for lacking ambition or for describing ongoing provision rather than change. Do not suggest tightening a beneficiary descriptor (e.g. "local communities") unless it is genuinely too vague to derive roles from. A purpose is Weak if it cannot anchor role design. It is not Weak simply because it lacks vision-level aspiration.
-- DUAL-FUNCTION ROLES: Do not flag a role as poorly designed solely because it combines two related functions (e.g. new account development and account management in a sales role, or brand and lead generation in a marketing role). Broad, multi-function roles are common and often appropriate in SMEs where one person owns an entire function. The diagnostic question is not whether the role should be split — it is whether the success measures reflect the full scope of what the role owns, and whether there are explicit accountability measures for value delivered to internal stakeholders (e.g. does the marketing role have a KRA covering what it delivers to the sales team?). If internal handoff accountability is missing, name that as the specific gap rather than implying the role scope is wrong.
-- Coverage gaps should reflect functions genuinely missing given this org's purpose — not a generic checklist.
-- If there are no overlap gaps or alignment gaps, return empty arrays.
-- whatThisMeansInPractice must synthesise ALL three passes — purpose, roles, and collective alignment — into one lived-experience paragraph. It should feel like someone who has been watching this business for six months finally said something out loud.
-- whatRemainsImpossible must produce one entry per material gap identified. Do not produce generic entries. Each one must follow directly from a specific finding in the diagnostic.
-- Return ONLY the JSON object. No markdown fences. No explanation. Just the JSON.
-- Be concise in all observation and headline fields. One sentence means one sentence — no run-ons. Prioritise signal over completeness. The goal is a tight, high-signal JSON output, not an exhaustive one.
-- STRUCTURAL APEX LANGUAGE: Never assume the person at the top of the structure is a founder, owner, or entrepreneur. They may be a CEO, GM, managing director, or any other senior leader. Never use the words "founder" or "owner" in any output field. Instead, describe the structural behaviour and its cause: decisions routing to the top of the structure, accountability gaps that default upward, or the most senior person absorbing work that has no defined owner. The finding should be true regardless of who sits at the top — write it that way.
-- CLEAN BILL OF HEALTH: If the org purpose is strong and the role set is well-designed with no material gaps, say so directly. A clean or near-clean diagnostic is a valid and valuable output — do not manufacture gaps or recommendations to fill the report. If coverageGaps, overlapGaps, or alignmentGaps are genuinely absent, return empty arrays. If whatRemainsImpossible has no material entries, return an empty array. In this case, whatThisMeansInPractice should name what the organisation has gotten structurally right and what to protect as it grows — not invent problems that do not exist. The nextStep in a clean diagnostic should reflect consolidation or scaling guidance, not remediation.`;
-  }
-
   // ── Run diagnostic ──────────────────────────────────────────────────────────
   async function runDiagnostic() {
     setError(null);
 
     // Validation
+    if (!contactName.trim()) { setError("Please enter your name so we can send you your report."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim())) { setError("Please enter a valid email address so we can send you your report."); return; }
     if (!purposeMode) { setError("Please select whether you have an org purpose statement."); return; }
     if (purposeMode === "have" && !purposeText.trim()) { setError("Please enter your org purpose statement."); return; }
     if (purposeMode === "build" && !scaffold.what.trim()) { setError("Please answer at least the first purpose question."); return; }
@@ -656,50 +564,43 @@ CRITICAL INSTRUCTIONS:
     setStep("loading");
     setLoadingMsg("Reading your documents and org context...");
 
-    const messages = [
-      { role: "user", content: buildPrompt() }
+    const timers = [
+      setTimeout(() => setLoadingMsg("Running Pass 1 — assessing your purpose statement..."), 4000),
+      setTimeout(() => setLoadingMsg("Running Pass 2 — assessing individual roles..."), 10000),
+      setTimeout(() => setLoadingMsg("Running Pass 3 — mapping collective alignment..."), 18000),
+      setTimeout(() => setLoadingMsg("Building your report and sending your copy..."), 26000),
     ];
+    const controller = new AbortController();
+    const hardTimeout = setTimeout(() => controller.abort(), 120000);
+    const clearTimers = () => { timers.forEach(clearTimeout); clearTimeout(hardTimeout); };
 
     try {
-      setTimeout(() => setLoadingMsg("Running Pass 1 — assessing your purpose statement..."), 4000);
-      setTimeout(() => setLoadingMsg("Running Pass 2 — assessing individual roles..."), 10000);
-      setTimeout(() => setLoadingMsg("Running Pass 3 — mapping collective alignment..."), 18000);
-      setTimeout(() => setLoadingMsg("Building your report..."), 26000);
-
-      // Hard timeout — never stay stuck on loading screen
-      const timeoutId = setTimeout(() => {
-        setError("The diagnostic is taking longer than expected. Please try again.");
-        setStep("input");
-      }, 90000);
-
       const response = await fetch("/api/diagnose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 8000,
-          messages,
+          contact: { name: contactName.trim(), email: contactEmail.trim(), optIn },
+          website,
+          orgName, industry, purposeMode, purposeText, scaffold,
+          roles: validRoles.map(r => ({ title: r.title, manualText: r.manualText, files: r.files })),
         }),
       });
 
-      clearTimeout(timeoutId);
-      const data = await response.json();
-
-      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-
-      const raw = data.content?.find(b => b.type === "text")?.text || "";
-      // Strip markdown fences, leading/trailing whitespace, and any text before the first {
-      const firstBrace = raw.indexOf("{");
-      const lastBrace = raw.lastIndexOf("}");
-      const extracted = firstBrace !== -1 && lastBrace !== -1
-        ? raw.slice(firstBrace, lastBrace + 1)
-        : raw.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(extracted);
-      setReport(parsed);
+      const data = await response.json().catch(() => ({}));
+      clearTimers();
+      if (!response.ok || data.error || !data.report) {
+        throw new Error(data.error?.message || "The diagnostic couldn't be completed. Please try again.");
+      }
+      setReport(data.report);
+      setDelivery(data.delivery || null);
       setStep("report");
+      window.scrollTo?.(0, 0);
     } catch (err) {
-      clearTimeout(timeoutId);
-      setError(`Something went wrong: ${err.message}. Please try again — if the problem persists, try reducing the number of roles or the length of your JD text.`);
+      clearTimers();
+      setError(err.name === "AbortError"
+        ? "The diagnostic is taking longer than expected. Please try again — if it keeps happening, try fewer roles or shorter documents."
+        : err.message);
       setStep("input");
     }
   }
@@ -707,139 +608,11 @@ CRITICAL INSTRUCTIONS:
   // ── PDF generation ──────────────────────────────────────────────────────────
   function generatePDF() {
     if (!report) return;
-
-    // Build printable HTML, open in new window, trigger print-to-PDF
-    const dateStr = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
-
-    const purposeRatingColor = report.purposeAssessment.rating === "Strong" ? "#27AE60"
-      : report.purposeAssessment.rating === "Partial" ? "#E67E22" : "#C0392B";
-
-    const structuralColor = report.collectiveAlignment.structuralHealth === "Strong" ? "#27AE60"
-      : report.collectiveAlignment.structuralHealth === "Developing" ? "#E67E22" : "#C0392B";
-
-    const roleRows = (report.roleAssessments || []).map(r => `
-      <div style="margin-bottom:18px; padding:14px 18px; background:#F4F7FA; border-left:4px solid #0A2A43; border-radius:0 5px 5px 0;">
-        <div style="font-weight:700; font-size:14px; color:#0A2A43; margin-bottom:6px;">${r.roleTitle}</div>
-        <div style="font-size:13px; color:#2E2E2E; margin-bottom:4px;"><strong>Purpose:</strong> ${r.purposeRating} &nbsp;|&nbsp; <strong>KRAs:</strong> ${r.kraRating}</div>
-        <div style="font-size:14px; color:#2E2E2E; margin-top:8px; line-height:1.6;">${r.headline}</div>
-        ${r.recommendation ? `<div style="font-size:13px; color:#666; margin-top:6px; font-style:italic;">→ ${r.recommendation}</div>` : ""}
-      </div>`).join("");
-
-    const coverageRows = (report.collectiveAlignment.coverageGaps || []).map(g => `
-      <div style="margin-bottom:10px; padding:12px 16px; background:#FEF2F2; border-left:4px solid #C0392B; border-radius:0 5px 5px 0; font-size:14px; color:#2E2E2E; line-height:1.6;">
-        <strong>${g.function}:</strong> ${g.observation}
-      </div>`).join("");
-
-    const overlapRows = (report.collectiveAlignment.overlapGaps || []).map(g => `
-      <div style="margin-bottom:10px; padding:12px 16px; background:#FFF8EC; border-left:4px solid #C9A46A; border-radius:0 5px 5px 0; font-size:14px; color:#2E2E2E; line-height:1.6;">
-        <strong>${g.roles}:</strong> ${g.observation}
-      </div>`).join("");
-
-    const alignRows = (report.collectiveAlignment.alignmentGaps || []).map(g => `
-      <div style="margin-bottom:10px; padding:12px 16px; background:#FFF8EC; border-left:4px solid #C9A46A; border-radius:0 5px 5px 0; font-size:14px; color:#2E2E2E; line-height:1.6;">
-        <strong>${g.role}:</strong> ${g.observation}
-      </div>`).join("");
-
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Org Clarity Diagnostic — ${report.orgName || "Your Organisation"}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Calibri, 'Segoe UI', sans-serif; color: #2E2E2E; background: #fff; }
-  @media print {
-    .no-print { display: none !important; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
-  .page { max-width: 800px; margin: 0 auto; padding: 0 0 60px; }
-  .cover { background: #0A2A43; padding: 40px 48px 32px; border-bottom: 4px solid #C9A46A; }
-  .section { padding: 28px 48px; border-bottom: 1px solid #E8E8E8; }
-  .section:last-child { border-bottom: none; }
-  h1 { font-size: 26px; font-weight: 700; color: #fff; }
-  h2 { font-size: 17px; font-weight: 700; color: #0A2A43; margin-bottom: 14px; }
-  .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #C9A46A; margin-bottom: 6px; }
-  .meta { font-size: 12px; color: #AFCBE3; margin-top: 6px; }
-  .pill { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #fff; margin-right: 8px; }
-  .purpose-box { background: #F0F6FB; border: 1.5px solid #AFCBE3; border-radius: 6px; padding: 14px 18px; font-size: 14px; color: #0A2A43; line-height: 1.6; font-style: italic; margin-bottom: 16px; }
-  .headline { font-size: 15px; font-weight: 600; color: #0A2A43; line-height: 1.5; margin-bottom: 10px; }
-  .cta { background: #0A2A43; padding: 28px 48px; margin-top: 0; }
-  .cta h2 { color: #fff; }
-  .cta p { color: #AFCBE3; font-size: 13px; line-height: 1.5; margin-top: 8px; }
-  .print-btn { background: #C9A46A; color: #fff; border: none; padding: 12px 28px; font-size: 14px; font-weight: 700; border-radius: 5px; cursor: pointer; margin-top: 16px; font-family: Calibri, sans-serif; }
-</style>
-</head>
-<body>
-<div class="page">
-  <div class="cover">
-    <div class="label">James Kilby Advisory</div>
-    <h1>Org Clarity Diagnostic</h1>
-    <div class="meta">${report.orgName || "Your Organisation"} &nbsp;·&nbsp; ${report.industry || ""} &nbsp;·&nbsp; ${dateStr}</div>
-  </div>
-
-  <div class="section">
-    <div class="label">Pass 1 — Org Purpose Assessment</div>
-    <h2>Your Purpose Statement</h2>
-    <div class="purpose-box">${report.purposeAssessment.purposeStatement}</div>
-    <span class="pill" style="background:${purposeRatingColor}">${report.purposeAssessment.rating}</span>
-    <div style="margin-top:14px; font-size:14px; line-height:1.65; color:#2E2E2E;">
-      <div class="headline">${report.purposeAssessment.headline}</div>
-      ${report.purposeAssessment.coaching ? `<p style="font-size:13px; color:#555; margin-top:8px;">${report.purposeAssessment.coaching}</p>` : ""}
-    </div>
-    <div style="margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      ${Object.entries(report.purposeAssessment.criteria || {}).map(([k, v]) => `
-        <div style="background:#F4F7FA; padding:10px 14px; border-radius:5px; font-size:13px;">
-          <strong style="color:#0A2A43; text-transform:capitalize;">${k.replace(/([A-Z])/g, " $1")}:</strong><br/>${v}
-        </div>`).join("")}
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="label">Pass 2 — Role Assessments</div>
-    <h2>Your Roles</h2>
-    ${roleRows || "<p style='font-size:14px;color:#666;'>No roles assessed.</p>"}
-  </div>
-
-  <div class="section">
-    <div class="label">Pass 3 — Collective Alignment</div>
-    <h2>Structural Health: <span style="color:${structuralColor}">${report.collectiveAlignment.structuralHealth}</span></h2>
-    <p style="font-size:14px; line-height:1.65; color:#2E2E2E; margin-bottom:20px;">${report.collectiveAlignment.summaryObservation}</p>
-
-    ${coverageRows ? `<h3 style="font-size:14px;font-weight:700;color:#0A2A43;margin-bottom:10px;">Coverage Gaps</h3>${coverageRows}` : ""}
-    ${overlapRows ? `<h3 style="font-size:14px;font-weight:700;color:#0A2A43;margin:16px 0 10px;">Overlap Gaps</h3>${overlapRows}` : ""}
-    ${alignRows ? `<h3 style="font-size:14px;font-weight:700;color:#0A2A43;margin:16px 0 10px;">Alignment Gaps</h3>${alignRows}` : ""}
-
-    <div style="margin-top:20px; background:#F0F6FB; border-radius:6px; padding:16px 20px;">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#C9A46A;margin-bottom:6px;">Most Important Next Step</div>
-      <div style="font-size:15px;font-weight:600;color:#0A2A43;line-height:1.5;">${report.collectiveAlignment.nextStep}</div>
-    </div>
-  </div>
-
-  <div class="cta">
-    <h2>Your report has identified structural gaps. The conversation that matters is which one to fix first.</h2>
-    <p>Book a 45-minute call with James Kilby Advisory to identify the highest-priority structural change and what it looks like in practice.</p>
-    <p style="margin-top:12px;"><a href="https://calendly.com/j-kilby/30min" style="background:#C9A46A;color:#fff;padding:10px 24px;border-radius:5px;text-decoration:none;font-weight:700;font-size:14px;">Book a 45-minute call →</a></p>
-    <p style="margin-top:12px; color:#C9A46A; font-weight:600;">jameskilbyadvisory.com.au</p>
-  </div>
-
-  <div style="padding:16px 48px;" class="no-print">
-    <button class="print-btn" onclick="window.print()">Save as PDF</button>
-  </div>
-</div>
-</body>
-</html>`;
-
     const w = window.open("", "_blank");
-    w.document.write(html);
+    if (!w) { setError("Your browser blocked the PDF window. Please allow pop-ups for this page and try again."); return; }
+    w.document.write(renderReportHtml(report, { mode: "print" }));
     w.document.close();
     setTimeout(() => w.print(), 600);
-  }
-
-  // ── Email CTA (simulated — no backend) ─────────────────────────────────────
-  function handleEmailSubmit() {
-    if (!email.trim()) return;
-    // In production this would POST to a backend / email service
-    setEmailSent(true);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -867,6 +640,29 @@ CRITICAL INSTRUCTIONS:
         {step === "input" && (
           <>
             {error && <div style={S.errorBox}>{error}</div>}
+
+            {/* Contact details */}
+            <div style={S.card}>
+              <h2 style={S.sectionTitle}>Where should we send your report?</h2>
+              <p style={S.sectionHint}>Your report appears on screen when it's ready, and a copy is emailed to you to keep.</p>
+              <div style={S.twoCol}>
+                <div>
+                  <label style={S.label} htmlFor="ocd-name">Your name</label>
+                  <input id="ocd-name" style={S.input} value={contactName} onChange={e => setContactName(e.target.value)} placeholder="e.g. Sam Taylor" autoComplete="name" />
+                </div>
+                <div>
+                  <label style={S.label} htmlFor="ocd-email">Work email</label>
+                  <input id="ocd-email" type="email" style={S.input} value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="you@company.com.au" autoComplete="email" />
+                </div>
+              </div>
+              <label style={S.checkRow}>
+                <input type="checkbox" checked={optIn} onChange={e => setOptIn(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>Send me occasional insights from James Kilby Advisory. Unsubscribe any time.</span>
+              </label>
+              <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
+                <label>Leave this field empty<input tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
+              </div>
+            </div>
 
             {/* Org context */}
             <div style={S.card}>
@@ -1024,6 +820,11 @@ CRITICAL INSTRUCTIONS:
         {/* ── REPORT STEP ── */}
         {step === "report" && report && (
           <>
+            {delivery?.emailed && (
+              <div style={S.sentBox}>
+                ✓ A copy of this report has been sent to <strong>{contactEmail.trim()}</strong>. If it isn't in your inbox in a few minutes, check your junk folder.
+              </div>
+            )}
             <div style={S.reportWrap} ref={reportRef}>
 
               {/* Report header */}
@@ -1233,7 +1034,7 @@ CRITICAL INSTRUCTIONS:
               <button style={S.secondaryBtn} onClick={generatePDF}>
                 Download PDF Report
               </button>
-              <button style={S.outlineBtn} onClick={() => { setStep("input"); setReport(null); setEmailSent(false); }}>
+              <button style={S.outlineBtn} onClick={() => { setStep("input"); setReport(null); setDelivery(null); window.scrollTo?.(0, 0); }}>
                 Run Another Diagnostic
               </button>
             </div>
