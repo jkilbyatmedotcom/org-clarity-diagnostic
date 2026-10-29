@@ -41,3 +41,6 @@ HubSpot stopped allowing new private apps in October 2026. Use a Service Key ins
 - If the user enters an ABN, the report header shows their legal name, ABN, years registered and state, and the details go into the HubSpot note and your lead email.
 - If no ABN is entered, the tool searches the register by organisation name. It only accepts a clear-cut match, never shows a name match to the user, and flags it in your copy as "matched by name, please verify".
 - "Years registered" comes from the date the ABN's current status took effect, which is usually, but not always, when the business started.
+
+## Decision rights (from the JDs)
+The diagnostic reads each JD against seven decision areas (pricing or discounts, hiring, spending above a limit, complaints or refunds, rosters and allocation, suppliers, new products or offers) and marks each role's authority as stated, implied or not covered. The same area codes are used by the culture and leader surveys, so the JD view compares directly with what leaders intend and what staff experience. The output is checked and cleaned on the server (`lib/decisionRights.js`); a malformed answer drops the section rather than breaking the report. The main call's output budget is 10,000 tokens to make room for the grid.
