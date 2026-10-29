@@ -27,3 +27,10 @@ After adding or changing variables, redeploy for them to take effect.
 - The diagnostic runs on the server with a fixed prompt, model and token limit. The browser only sends the user's answers.
 - When the report is ready, the server sends two emails (to the user, and a copy to you with their details, reply-to set to them) and upserts them in HubSpot with a note.
 - If any delivery step fails, it is logged in Vercel's function logs and the user still sees their report.
+
+## Purpose–Market Alignment (optional website field)
+- If a user enters their website, the server reads the homepage plus up to two About/Services pages as plain text (capped at ~3,500 tokens) and runs a second, smaller Claude call in parallel with the main diagnostic.
+- Adds roughly US$0.02 per diagnostic that includes a website. No extra environment variables are needed.
+- Only public web addresses are fetched; private and internal network addresses are refused, including via redirects.
+- If the site can't be read (blocked, too little text, JavaScript-only pages), the report shows a short note and everything else is unaffected.
+- Site reads are cached per server instance for 30 days.

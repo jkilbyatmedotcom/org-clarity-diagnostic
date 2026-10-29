@@ -1,5 +1,7 @@
 import { buildPrompt } from "../lib/prompt.js";
 import { deliverReport } from "../lib/deliver.js";
+import { readWebsite } from "../lib/website.js";
+import { buildAlignmentPrompt, ALIGNMENT_MAX_TOKENS } from "../lib/alignment.js";
 
 // ─── Fixed server-side settings ───────────────────────────────────────────────
 // The browser can no longer choose the model, token budget or prompt.
@@ -53,7 +55,7 @@ function parseInput(body) {
   if (!body || typeof body !== "object") return { error: "Invalid request." };
 
   // Honeypot: real users never see or fill this field.
-  if (str(body.website, 100)) return { error: "Invalid request." };
+  if (str(body.hp_check, 100)) return { error: "Invalid request." };
 
   const contact = {
     name: str(body.contact?.name, LIMITS.short),
@@ -87,7 +89,10 @@ function parseInput(body) {
   })).filter(r => r.files.length > 0 || r.manualText);
   if (roles.length === 0) return { error: "Please add at least one role — upload a JD or enter role details manually." };
 
+  const website = str(body.website_url, 300);
+
   const input = {
+    website,
     orgName: str(body.orgName, LIMITS.short),
     industry: str(body.industry, LIMITS.short),
     purposeMode, purposeText, scaffold, roles,
@@ -105,6 +110,43 @@ function extractJson(raw) {
   return JSON.parse(s);
 }
 
+async function callClaude(prompt, maxTokens) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] }),
+  });
+  const data = await response.json();
+  if (!response.ok || data.error) {
+    const err = new Error("Anthropic error");
+    err.detail = `${response.status} ${JSON.stringify(data.error || data).slice(0, 500)}`;
+    throw err;
+  }
+  return extractJson(data.content?.find(b => b.type === "text")?.text || "");
+}
+
+// Optional Purpose–Market Alignment. Runs alongside the main diagnostic and
+// never fails it: any problem returns { status: "unavailable" } instead.
+async function runAlignment(input) {
+  if (!input.website) return null;
+  const site = await readWebsite(input.website);
+  if (site.error) {
+    if (site.detail) console.warn("[alignment] website read failed:", site.url, site.detail);
+    return { status: "unavailable", url: site.url, reason: site.error };
+  }
+  try {
+    const a = await callClaude(buildAlignmentPrompt({ ...input, websiteContent: site.content }), ALIGNMENT_MAX_TOKENS);
+    return { status: "ok", url: site.url, pagesRead: site.pages.map(p => p.url), ...a };
+  } catch (err) {
+    console.error("[alignment] analysis failed", err.detail || err);
+    return { status: "unavailable", url: site.url, reason: "The website analysis couldn't be completed this time." };
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -119,32 +161,23 @@ export default async function handler(req, res) {
   if (parsed.error) return fail(res, 400, parsed.error);
   const { contact, input } = parsed;
 
+  const alignmentPromise = runAlignment(input).catch(err => {
+    console.error("[alignment] unexpected", err);
+    return null;
+  });
+
   let report;
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        messages: [{ role: "user", content: buildPrompt(input) }],
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok || data.error) {
-      console.error("[diagnose] Anthropic error", response.status, JSON.stringify(data.error || data).slice(0, 500));
-      return fail(res, 502, "The diagnostic service is busy. Please try again in a minute.");
-    }
-    const raw = data.content?.find(b => b.type === "text")?.text || "";
-    report = extractJson(raw);
+    report = await callClaude(buildPrompt(input), MAX_TOKENS);
   } catch (err) {
-    console.error("[diagnose] failed", err);
-    return fail(res, 502, "The diagnostic couldn't be completed. Please try again — if it keeps happening, try fewer roles or shorter documents.");
+    console.error("[diagnose] failed", err.detail || err);
+    return fail(res, 502, err.detail
+      ? "The diagnostic service is busy. Please try again in a minute."
+      : "The diagnostic couldn't be completed. Please try again — if it keeps happening, try fewer roles or shorter documents.");
   }
+
+  const alignment = await alignmentPromise;
+  if (alignment) report.purposeMarketAlignment = alignment;
 
   // Report is ready. Deliver it (emails + CRM) before responding, because the
   // function may be frozen as soon as the response is sent.
