@@ -9,10 +9,19 @@ Wording source of truth: the "Enabling Culture Fingerprint — Survey Item Bank 
 3. Redeploy.
 
 ## Adding a pilot organisation
-Edit `lib/culture/pilots.js`: copy an entry, set `org`, the real `teams` list, 4–6 `decisionAreas` (PRC, HIR, SPD, CMP, SCH, SUP, NEW) and `spendAmount`. Commit and redeploy. **The Padre entry currently has placeholder sites — replace them before launch.**
+Edit `lib/culture/pilots.js`: copy an entry, set `org`, the real `teams` list, 4–6 `decisionAreas` (PRC, HIR, SPD, CMP, SCH, SUP, NEW) and `spendAmount`. Commit and redeploy.
 
 ## Downloading responses
 `https://<your-app>.vercel.app/api/culture-export?pilot=padre&key=<CULTURE_ADMIN_KEY>` downloads a CSV (one row per response, one column per item). Add `&format=json` for the raw records.
+
+## Results view
+`https://<your-app>.vercel.app/culture/results`. Enter `CULTURE_ADMIN_KEY` (kept only for that browser tab), pick the organisation. Shows aggregates only:
+- **Fingerprint:** staff points split and scenario profile against the owner's view of now and of what the business needs, on the 8-style circumplex.
+- **Fit scores:** 50 × (1 + r) on centred profiles. Bands are provisional until pilot data calibrates them.
+- **By site and level:** groups under 5 are pooled into "Other sites (combined)"; a pool still under 5 is withheld.
+- **Decision rights:** organisation level only. Owner's answer vs staff, "don't know" share, "check with the owner" share.
+- **Data quality:** completion time, rushing and concentration flags, per-statement spread, order effect, scenario N/A rates and options nobody picks.
+Nothing shows for staff until at least 5 staff have responded. "Print / save PDF" gives a clean copy for a debrief.
 
 ## Privacy
 - No names or emails collected. Team, role and tenure only.
