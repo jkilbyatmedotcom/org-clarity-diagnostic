@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         culture: resolve(__dirname, 'culture.html'),
+        cultureResults: resolve(__dirname, 'culture-results.html'),
       },
     },
   },

@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/culture/results", "destination": "/culture-results.html" },
     { "source": "/culture", "destination": "/culture.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
