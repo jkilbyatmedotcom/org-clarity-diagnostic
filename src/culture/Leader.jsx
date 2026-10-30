@@ -130,7 +130,7 @@ export default function Leader() {
       <h2 style={S.h2}>Where is {pilot.org} heading, and what will it take?</h2>
       <p style={S.p}>This survey is for the owners and leaders of {pilot.org}. It asks about strategy, the culture the business needs, and who should make which decisions. It takes about 12 minutes.</p>
       <p style={S.p}><strong>This survey is named, not anonymous.</strong> With a small leadership team, anonymity isn't possible, and comparing leaders' views openly is the point. Your answers are seen by James Kilby Advisory and discussed with the leadership team.</p>
-      <p style={S.hint}>Staff take a separate, anonymous survey. Your progress is saved on this device if you're interrupted.</p>
+      <p style={S.hint}>Staff take a separate, anonymous survey. Your progress is saved on this device if you're interrupted. <a href="https://jameskilbyadvisory.com.au/privacy" target="_blank" rel="noopener noreferrer" style={{ color: NAVY }}>Privacy policy</a>.</p>
     </>);
   } else if (stepId === "about") {
     const roleOpts = [...roles.map(r => ({ id: r, text: r })), { id: ROLE_NOT_LISTED, text: "My role isn't listed" }, { id: ROLE_NO_JD, text: "I don't have a JD" }];
