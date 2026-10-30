@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { renderReportHtml, verifiedIdentity } from "../lib/reportHtml.js";
+import { renderReportHtml, verifiedIdentity, ctaCopy } from "../lib/reportHtml.js";
 import { DR_AREAS } from "../lib/decisionRights.js";
 import { extractText, titleFromFileName } from "./extractText.js";
 
@@ -1166,23 +1166,12 @@ export default function OrgClarityDiagnostic() {
               {/* CTA block */}
               <div style={S.ctaBlock}>
                 {(() => {
-                  const gapCount = [
-                    ...(report.collectiveAlignment.coverageGaps || []),
-                    ...(report.collectiveAlignment.overlapGaps || []),
-                    ...(report.collectiveAlignment.alignmentGaps || []),
-                  ].length;
-                  const hasGaps = gapCount > 0;
+                  const cta = ctaCopy(report);
                   return (
                     <>
-                      <p style={S.ctaTitle}>
-                        {hasGaps
-                          ? `Your report has identified ${gapCount} structural ${gapCount === 1 ? 'gap' : 'gaps'}.`
-                          : `Your structure is sound — here's how to keep it that way.`}
-                      </p>
+                      <p style={S.ctaTitle}>{cta.title}</p>
                       <p style={S.ctaText}>
-                        {hasGaps
-                          ? `The conversation that matters now is which one to fix first and what that looks like in practice. Book a 45-minute call with James.`
-                          : `A 45-minute call with James will identify what to protect and what to build on as you scale.`}
+                        {cta.text}
                       </p>
                       <div style={{ marginTop: 8 }}>
                         <a
