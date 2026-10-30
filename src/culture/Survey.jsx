@@ -135,7 +135,7 @@ export default function Survey() {
       <h2 style={S.h2}>How do things actually work at {pilot.org}?</h2>
       <p style={S.p}>This short survey asks about your day-to-day experience at work. It takes about 10 minutes, and there are no right or wrong answers. Answer from what has actually happened to you recently, not what should happen.</p>
       <p style={S.p}><strong>Your answers are anonymous.</strong> We don't ask for your name. {pilot.org} will only ever see results combined by team, and never for a group of fewer than five people. James Kilby Advisory sees the anonymous responses so it can improve the survey.</p>
-      <p style={S.hint}>Your progress is saved on this device, so you can come back to it if you're interrupted.</p>
+      <p style={S.hint}>Your progress is saved on this device, so you can come back to it if you're interrupted. <a href="https://jameskilbyadvisory.com.au/privacy" target="_blank" rel="noopener noreferrer" style={{ color: NAVY }}>Privacy policy</a>.</p>
     </>);
   } else if (stepId === "about") {
     content = (<>

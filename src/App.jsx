@@ -715,6 +715,9 @@ export default function OrgClarityDiagnostic() {
                 <input type="checkbox" checked={optIn} onChange={e => setOptIn(e.target.checked)} style={{ marginTop: 3 }} />
                 <span>Send me occasional insights from James Kilby Advisory. Unsubscribe any time.</span>
               </label>
+              <p style={{ fontSize: 12, color: "#777", margin: "8px 0 0", lineHeight: 1.5 }}>
+                How we use and protect your information: <a href="https://jameskilbyadvisory.com.au/privacy" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 600 }}>privacy policy</a>.
+              </p>
               <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
                 <label>Leave this field empty<input tabIndex={-1} autoComplete="off" name="hp_check" value={hpCheck} onChange={e => setHpCheck(e.target.value)} /></label>
               </div>
