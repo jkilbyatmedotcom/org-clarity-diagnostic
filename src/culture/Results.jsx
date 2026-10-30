@@ -366,13 +366,14 @@ function Leadership({ L }) {
       </div>
       <p style={{ ...S.hint, marginTop: 6 }}>The strategy profile is worked out from each leader's industry, how they win customers and how fast the market is changing (mapping {L.mappingVersion}). Differences of 10 or more are flagged for discussion, not as errors.</p>
 
-      <h3 style={{ ...S.h2, fontSize: 17, marginTop: 20 }}>Decision rights: intended, believed and experienced</h3>
+      <h3 style={{ ...S.h2, fontSize: 17, marginTop: 20 }}>Decision rights: {L.jdSource ? "written, intended, believed and experienced" : "intended, believed and experienced"}</h3>
       <div className="ecr-scroll">
         <table className="ecr-table">
-          <thead><tr><th>Decision</th><th>Leaders: should decide</th><th>Leaders: decides today</th><th>Staff: decides today</th><th className="num">Staff matching "should"</th></tr></thead>
+          <thead><tr><th>Decision</th>{L.jdSource && <th>JDs: stated authority</th>}<th>Leaders: should decide</th><th>Leaders: decides today</th><th>Staff: decides today</th><th className="num">Staff matching "should"</th></tr></thead>
           <tbody>{L.decisions.map(d => (
             <tr key={d.area}>
               <td><strong>{d.label.charAt(0).toUpperCase() + d.label.slice(1)}</strong></td>
+              {L.jdSource && <td>{d.jdHolder || <span style={{ color: "#A93226" }}>No role</span>}</td>}
               <td>{d.shouldMode || "–"}{d.leadersAgreeOnShould === false && <div style={{ ...S.hint, color: "#A93226" }}>Leaders disagree</div>}</td>
               <td>{d.doesMode || "–"}{d.shouldMatchesDoes === false && <div style={{ ...S.hint, color: "#B7791F" }}>Differs from intent</div>}</td>
               <td>{d.staffTop || "–"}</td>
@@ -381,12 +382,12 @@ function Leadership({ L }) {
           ))}</tbody>
         </table>
       </div>
-      <p style={{ ...S.hint, marginTop: 6 }}>Staff columns appear once five or more staff have responded. The JD column joins this table when the JD tool's decision-rights pass is added.</p>
+      <p style={{ ...S.hint, marginTop: 6 }}>Staff columns appear once five or more staff have responded.{L.jdSource ? ` JD column: which role's JD states authority for the decision (${L.jdSource}).` : " Add the Org Clarity Diagnostic's decision-rights grid to this pilot to show what the JDs say."}</p>
 
       {(L.noJd.length > 0 || L.unclaimedRoles.length > 0) && (
         <div style={S.note}>
           {L.noJd.length > 0 && <div><strong>Leaders without a JD:</strong> {L.noJd.join(", ")}.</div>}
-          {L.unclaimedRoles.length > 0 && <div><strong>JD roles no leader claimed:</strong> {L.unclaimedRoles.join(", ")}.</div>}
+          {L.unclaimedRoles.length > 0 && <div><strong>Leadership roles in the JDs that no leader claimed:</strong> {L.unclaimedRoles.join(", ")}.</div>}
         </div>
       )}
 
