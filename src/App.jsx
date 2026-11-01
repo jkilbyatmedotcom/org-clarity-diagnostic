@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { renderReportHtml, verifiedIdentity, ctaCopy } from "../lib/reportHtml.js";
 import { DR_AREAS } from "../lib/decisionRights.js";
+import { headcountLine } from "../lib/headcount.js";
 import { extractText, titleFromFileName } from "./extractText.js";
 
 const MAX_ROLES = 40;          // must match LIMITS.roles in api/diagnose.js
@@ -518,8 +519,10 @@ export default function OrgClarityDiagnostic() {
 
   // Roles — each has title, uploadedFiles[], manualText
   const [roles, setRoles] = useState([
-    { id: 1, title: "", files: [], manualText: "" },
+    { id: 1, title: "", files: [], manualText: "", headcount: "" },
   ]);
+  // Optional: how many people hold each role (off unless the owner ticks it)
+  const [withHeadcount, setWithHeadcount] = useState(false);
 
   // Report state
   const [report, setReport]   = useState(null);
@@ -542,9 +545,24 @@ export default function OrgClarityDiagnostic() {
   const reportRef = useRef(null);
 
   // ── Role helpers ────────────────────────────────────────────────────────────
+  const headcountValue = v => {
+    const n = parseInt(v, 10);
+    return Number.isInteger(n) && n >= 1 && n <= 9999 ? n : null;
+  };
+  const headcountInput = (role, idx) => (
+    <input
+      type="number" min="1" max="9999" inputMode="numeric"
+      style={{ ...S.input, width: 76, flex: "0 0 76px", textAlign: "right" }}
+      aria-label={`People in role ${idx + 1}${role.title ? ` (${role.title})` : ""}`}
+      placeholder="1"
+      value={role.headcount}
+      onChange={e => updateRole(role.id, "headcount", e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+    />
+  );
+
   function addRole() {
     if (roles.length >= MAX_ROLES) return;
-    setRoles(r => [...r, { id: Date.now(), title: "", files: [], manualText: "" }]);
+    setRoles(r => [...r, { id: Date.now(), title: "", files: [], manualText: "", headcount: "" }]);
   }
 
   function removeRole(id) {
@@ -582,9 +600,9 @@ export default function OrgClarityDiagnostic() {
       const kept = prev.filter(r => r.title.trim() || r.files.length || r.manualText.trim());
       const room = Math.max(0, MAX_ROLES - kept.length);
       if (loaded.length > room) setFileProblems(p => [...p, `Only ${MAX_ROLES} roles can be assessed at once, so ${loaded.length - room} file${loaded.length - room === 1 ? " was" : "s were"} left out.`]);
-      const added = loaded.slice(0, room).map((f, i) => ({ id: Date.now() + i, title: titleFromFileName(f.name), files: [f], manualText: "", bulk: true }));
+      const added = loaded.slice(0, room).map((f, i) => ({ id: Date.now() + i, title: titleFromFileName(f.name), files: [f], manualText: "", headcount: "", bulk: true }));
       const next = [...kept, ...added];
-      return next.length ? next : [{ id: 1, title: "", files: [], manualText: "" }];
+      return next.length ? next : [{ id: 1, title: "", files: [], manualText: "", headcount: "" }];
     });
   }
 
@@ -639,7 +657,7 @@ export default function OrgClarityDiagnostic() {
           website_url: websiteUrl.trim(),
           abn: abn.replace(/\D/g, ""),
           orgName, industry, purposeMode, purposeText, scaffold,
-          roles: validRoles.map(r => ({ title: r.title, manualText: r.manualText, files: r.files })),
+          roles: validRoles.map(r => ({ title: r.title, manualText: r.manualText, files: r.files, headcount: withHeadcount ? headcountValue(r.headcount) : null })),
         }),
       });
 
@@ -828,10 +846,19 @@ export default function OrgClarityDiagnostic() {
                 </p>
               )}
 
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, color: NAVY, margin: "4px 0 14px", cursor: "pointer" }}>
+                <input type="checkbox" checked={withHeadcount} onChange={e => setWithHeadcount(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>
+                  <strong>Add how many people are in each role</strong> (optional)
+                  <span style={{ display: "block", fontSize: 12, color: "#666" }}>Helps the diagnostic judge spans of control and coverage. Leave a role blank if you're not sure.</span>
+                </span>
+              </label>
+
               {roles.map((role, idx) => role.bulk ? (
                 <div key={role.id} style={{ ...S.roleCard, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ ...S.roleNum, minWidth: 28 }}>{idx + 1}</span>
                   <input style={{ ...S.input, flex: 1 }} aria-label={`Role ${idx + 1} title`} value={role.title} onChange={e => updateRole(role.id, "title", e.target.value)} />
+                  {withHeadcount && headcountInput(role, idx)}
                   <span style={{ fontSize: 12, color: "#888", flex: "0 1 180px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={role.files[0]?.name}>✓ {role.files[0]?.name}</span>
                   <button style={S.removeBtn} aria-label={`Remove ${role.title}`} onClick={() => removeRole(role.id)}>×</button>
                 </div>
@@ -853,6 +880,12 @@ export default function OrgClarityDiagnostic() {
                       placeholder="e.g. General Manager"
                     />
                   </div>
+                  {withHeadcount && (
+                    <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                      <label style={{ ...S.label, margin: 0 }}>People in this role</label>
+                      {headcountInput(role, idx)}
+                    </div>
+                  )}
 
                   {/* File upload */}
                   <div
@@ -1020,10 +1053,11 @@ export default function OrgClarityDiagnostic() {
                 <div style={S.passBlock}>
                   <p style={S.passTitle}>Pass 2 — Role Assessments</p>
                   <h3 style={S.passHeading}>Your Roles</h3>
+                  {report.headcount && <p style={{ ...S.sectionHint, marginTop: -4 }}>{headcountLine(report.headcount)}</p>}
                   {(report.roleAssessments || []).map((r, i) => (
                     <div key={i} style={{ marginBottom: 16 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                        <strong style={{ fontSize: 15, color: NAVY }}>{r.roleTitle}</strong>
+                        <strong style={{ fontSize: 15, color: NAVY }}>{r.roleTitle}{r.headcount ? <span style={{ fontWeight: 400, color: "#666", fontSize: 13 }}> · {r.headcount} {r.headcount === 1 ? "person" : "people"}</span> : null}</strong>
                         <div style={{ display: "flex", gap: 6 }}>
                           <span style={{ ...S.scorePill(ratingColor(r.purposeRating)), fontSize: 11 }}>
                             Purpose: {r.purposeRating}

@@ -5,6 +5,7 @@ import { buildAlignmentPrompt, ALIGNMENT_MAX_TOKENS } from "../lib/alignment.js"
 import { normaliseDecisionRights } from "../lib/decisionRights.js";
 import { runLargeOrg, SINGLE_REQUEST_MAX_ROLES } from "../lib/largeOrg.js";
 import { lookupBusiness, cleanAbn, isValidAbn } from "../lib/abn.js";
+import { cleanHeadcount, attachHeadcount } from "../lib/headcount.js";
 
 // ─── Fixed server-side settings ───────────────────────────────────────────────
 // The browser can no longer choose the model, token budget or prompt.
@@ -85,6 +86,7 @@ function parseInput(body) {
   const roles = body.roles.slice(0, LIMITS.roles).map(r => ({
     title: str(r?.title, LIMITS.short),
     manualText: str(r?.manualText, LIMITS.field),
+    headcount: cleanHeadcount(r?.headcount),
     files: (Array.isArray(r?.files) ? r.files : []).slice(0, LIMITS.filesPerRole).map(f => ({
       name: str(f?.name, LIMITS.short) || "document",
       text: typeof f?.text === "string" ? f.text.slice(0, LIMITS.charsPerFile) : "",
@@ -186,6 +188,7 @@ export default async function handler(req, res) {
   }
 
   report.decisionRights = normaliseDecisionRights(report.decisionRights, report);
+  attachHeadcount(report, input.roles);
 
   const [alignment, register] = await Promise.all([alignmentPromise, registerPromise]);
   if (alignment) report.purposeMarketAlignment = alignment;
